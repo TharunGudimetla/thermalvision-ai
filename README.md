@@ -1,44 +1,33 @@
-# ThermalVision AI – Thermal & Infrared Pedestrian Detection System
+# ThermalVision AI – Thermal Pedestrian Detection System
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-v4-38B2AC.svg)](https://tailwindcss.com/)
-[![YOLOv8](https://img.shields.io/badge/YOLOv8-1--Channel%20Adapted-FF6F00.svg)](https://github.com/ultralytics/ultralytics)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-An end-to-end, full-stack thermal surveillance dashboard and inference engine adapted for **1-Channel Long-Wave Infrared (LWIR) Pedestrian Detection and Tracking** using a customized YOLOv8 model architecture trained on the **FLIR Thermal Dataset (26,061 frames)**.
+An AI-powered thermal surveillance dashboard and inference engine adapted for **1-Channel Infrared Pedestrian Detection and Tracking** using a customized YOLOv8 model trained on the **FLIR Thermal Dataset (26,061 frames)**.
 
 ---
 
-## 🌟 Key Capabilities & Architecture
+## 🌟 Available Modules & Features
 
-### 1. 🎛️ Overview & Telemetry Dashboard
-- **Hardware & Model Telemetry:** Real-time health monitoring of the 1-channel YOLOv8 model, CPU/CUDA device allocation, and FLIR dataset metrics.
-- **Aggregated Analytics:** Live counters for total videos analyzed, unique pedestrian identities, total frames processed, and peak detection confidence.
-- **Input Evidence Folders:** Clean, square-box medium folder icon grid displaying analyzed inputs with cover thumbnails, pedestrian counts, and instant frame inspection.
-- **Automatic Deduplication:** Automatically overwrites repeat uploads for the same media file to eliminate duplicate history records.
+### 1. 🎛️ Overview Dashboard
+- **Model Telemetry:** Real-time status of the custom 1-channel YOLOv8 model, device assignment (CPU/CUDA), and dataset specifications.
+- **Session Counters:** Dynamic counters for total videos analyzed, unique pedestrian identities, and total frames processed.
+- **Input Evidence Folders:** Square-box folder grid organizing each analyzed input with cover thumbnails, pedestrian counts, and instant frame inspection.
+- **Automatic Deduplication:** Automatically overwrites previous entries for repeat uploads of the same media file.
 
-### 2. 📹 Video Analyzer & Adaptive Tracking
-- **Multi-Format Ingestion:** Drag-and-drop support for thermal surveillance formats: `MP4`, `AVI`, `MOV`, `MKV`, `WEBM`, `FLV`, `WMV`, and `TS`.
-- **High-Performance Inference:** Adaptive frame stride and optimized ByteTrack identity tracking delivering **2x–3x faster** inference on CPU/GPU.
-- **Interactive Scrubber:** Synchronized video player with timeline scrubber, play/pause, replay, and frame-accurate navigation.
-- **Evidentiary Snapshot & Forensic Dossier:** Automatic extraction of peak detection keyframes and one-click JSON incident dossier export.
-- **Bottom Keyframe Gallery:** Interactive thumbnails displaying extracted detection frames with confidence badges and timeline seek triggers.
+### 2. 🖼️ Image Analyzer
+- **Single & Batch Ingestion:** Ingest individual thermal images or upload entire batches of images (`JPG`, `PNG`, `WEBM`, `TIFF`).
+- **Interactive View Modes:** Inspect detections using **Side-by-Side**, **Annotated Only**, or **Original Thermal** views.
+- **Bounding Boxes & Overlap:** Highlights detected pedestrians with cyan bounding boxes, confidence percentages, and count indicators.
 
-### 3. 🖼️ Image & Batch Analyzer
-- **Dual Modality Analysis:** Supports both single-image analysis and multi-file batch uploads (`JPG`, `PNG`, `WEBM`, `TIFF`).
-- **Side-by-Side Comparison:** Interactive view toggles between *Side-by-Side*, *Annotated Only*, and *Original Thermal*.
-- **Bounding Boxes & IoU Badges:** Renders neon cyan target brackets, confidence scores, and IoU overlap indicators.
+### 3. 📹 Video Analyzer
+- **Multi-Format Support:** Ingests thermal video files (`MP4`, `AVI`, `MOV`, `MKV`, `WEBM`, `FLV`, `WMV`, `TS`).
+- **Adaptive Stride & Tracking:** ByteTrack tracking engine with adaptive frame stride for fast, smooth pedestrian identification.
+- **Integrated Video Player:** Synchronized timeline scrubber, play/pause controls, frame-by-frame navigation, and volume controls.
+- **Evidentiary Snapshot:** Automatically captures peak detection frames during processing.
+- **Forensic Dossier Export:** One-click JSON export of detection telemetry and download of annotated H.264 video.
+- **Bottom Keyframe Gallery:** Interactive thumbnail gallery displaying extracted detection frames with click-to-seek playback.
 
-### 4. 🔴 Live Stream / Camera Monitor
-- **Real-Time Grayscale Matrix Conversion:** Converts incoming camera feeds to single-channel luminance matrices.
-- **On-Screen Heads-Up Display (HUD):** Active pedestrian target counters, real-time FPS counter, and inference latency in milliseconds (`ms`).
-- **Forensic Snapshot Capture:** Instantly captures and logs evidentiary frames into the persistent SQLite database.
-
-### 5. 🗄️ Forensic Detection Vault (History)
-- **Organized Evidence Folders:** Grouped upload-wise by video session and image batch.
-- **Comprehensive Dossiers:** Search, filter, inspect enlarged frames, download annotated MP4 videos, and export forensic JSON reports.
+### 4. 🗄️ Incident History
+- **Organized Evidence Vault:** Stores analyzed sessions in dedicated folders.
+- **Detailed Frame Explorer:** Review all captured frames, view enlarged snapshots, delete individual records, or clear vault history.
 
 ---
 
@@ -48,136 +37,115 @@ An end-to-end, full-stack thermal surveillance dashboard and inference engine ad
 thermalvision-ai/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI server, REST routes, static file serving & SPA fallback
-│   │   ├── model_loader.py      # Custom 1-channel YOLOv8 engine & preprocessing
-│   │   ├── video_processor.py   # Asynchronous video inference, ByteTrack & H.264 writer
-│   │   └── database.py          # SQLite database storage & session deduplication
-│   ├── data/                    # Persistent SQLite database (surveillance.db)
+│   │   ├── main.py              # FastAPI server, REST API & frontend static bundle serving
+│   │   ├── model_loader.py      # Configurable 1-channel YOLOv8 manager & preprocessing
+│   │   ├── video_processor.py   # Asynchronous video processing, tracking & H.264 encoding
+│   │   └── database.py          # SQLite database storage & deduplication
+│   ├── data/                    # Persistent SQLite database
 │   └── models/
 │       └── best.pt              # Trained 1-channel YOLOv8 checkpoint
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── Navbar.tsx           # Surveillance navigation header
-│   │   │   ├── Overview.tsx         # Dashboard stats & evidence folder view
-│   │   │   ├── VideoAnalyzer.tsx    # Video player, scrubber & keyframes gallery
-│   │   │   ├── ImageAnalyzer.tsx    # Single/batch image thermal detection
-│   │   │   ├── LiveMonitor.tsx      # Real-time camera feed & HUD
-│   │   │   └── DetectionHistory.tsx # Incident vault & frame explorer
-│   │   ├── services/api.ts          # Unified REST API client (dynamic relative routing)
-│   │   ├── types/index.ts           # TypeScript interfaces
-│   │   ├── App.tsx                  # Root application state & navigation
-│   │   └── index.css                # Cyber surveillance Tailwind v4 styling
-│   ├── dist/                        # Pre-built production frontend bundle
-│   └── vite.config.ts               # Vite bundler configuration & API proxy
-├── run_app.py                   # Python one-click application launcher
-├── start_app.bat                # Windows double-click startup batch script
-├── requirements.txt             # Backend Python dependencies
+│   │   │   ├── Overview.tsx         # Dashboard metrics & evidence folders
+│   │   │   ├── ImageAnalyzer.tsx    # Single & batch thermal image detection
+│   │   │   ├── VideoAnalyzer.tsx    # Video ingestion, player & keyframe gallery
+│   │   │   └── DetectionHistory.tsx # Incident vault & history folders
+│   │   ├── services/api.ts          # REST client with dynamic relative routing
+│   │   ├── types/index.ts           # TypeScript type definitions
+│   │   ├── App.tsx                  # Application state & routing
+│   │   └── index.css                # Tailwind CSS styling
+│   ├── dist/                        # Pre-compiled production bundle
+│   └── vite.config.ts               # Vite configuration & proxy settings
+├── run_app.py                   # Python application launcher
+├── start_app.bat                # Windows one-click startup script
+├── requirements.txt             # Python dependencies
 └── README.md                    # Project documentation
 ```
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 How to Run
 
-### Prerequisites
-- **Python 3.10+**
-- **Node.js 18+** & **npm** (for frontend development)
+### 1. Installation
 
-### 1. Clone the Repository
+**Prerequisites:** Python 3.10+ and Node.js 18+ (optional, only needed if modifying frontend source).
+
 ```bash
+# Clone the repository
 git clone https://github.com/TharunGudimetla/thermalvision-ai.git
 cd thermalvision-ai
-```
 
-### 2. Install Dependencies
-```bash
-# Backend dependencies
+# Install Python dependencies
 pip install -r requirements.txt
-
-# Frontend dependencies (optional for dev)
-cd frontend
-npm install
-cd ..
 ```
 
-### 3. One-Click Launch (Recommended)
-On Windows, double-click **`start_app.bat`** or run:
+### 2. Start the Application (One-Click)
+
+On **Windows**, double-click **`start_app.bat`** or run:
 ```powershell
 python run_app.py
 ```
-This automatically initializes the backend, serves the bundled frontend on **Port 8000**, and opens your browser at **`http://localhost:8000`**.
 
----
+This starts the backend on **Port 8000** (which serves both the API and the React frontend) and automatically opens:
+👉 **`http://localhost:8000`**
 
-## 🛠️ Development Mode (With Hot Reload)
+### 3. Frontend Development Mode (Optional)
 
-If you are developing and modifying React components with Vite Hot-Module Replacement (HMR):
-
-**Terminal 1 — Backend:**
+If developing the frontend with Vite Hot Module Replacement (HMR):
 ```powershell
+# Terminal 1: Backend
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
-```
 
-**Terminal 2 — Frontend:**
-```powershell
+# Terminal 2: Frontend
 cd frontend
+npm install
 npm run dev
 ```
-Open **`http://localhost:5173`** in your browser (Vite automatically proxies `/api` calls to port 8000).
+Open **`http://localhost:5173`** (Vite proxies all `/api` requests to port 8000).
 
 ---
 
-## 🌐 Network & Remote Sharing
+## 🌐 Sharing via VS Code Port Forwarding
 
-### 1. VS Code Port Forwarding (Easiest)
-1. Open the **PORTS** tab in the bottom panel of VS Code.
-2. Forward Port **`8000`**.
+To share the application with another person using VS Code:
+
+1. Open the **PORTS** tab in VS Code (bottom panel next to Terminal).
+2. Click **Forward a Port** and enter **`8000`**.
 3. Right-click the forwarded port and set **Port Visibility** to **Public**.
-4. Share the generated HTTPS link with your team or collaborator. Both the UI and YOLOv8 inference will work out-of-the-box.
-
-### 2. Local Wi-Fi / LAN
-Because the server binds to `0.0.0.0:8000`, any device on the same local network can access the application directly via your machine's local IP:
-```
-http://<your-local-ip>:8000
-```
+4. Copy the generated **Forwarded Address** and share it.
+   - *Because the frontend and backend are unified on port 8000, your collaborator can open the link in any browser and use the full application without extra configuration.*
 
 ---
 
-## 📡 REST API Reference
+## 📡 REST API Endpoints
 
-Interactive Swagger documentation is available at **`http://localhost:8000/docs`**:
+The FastAPI backend provides interactive documentation at **`http://localhost:8000/docs`**:
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/health` | Service health status & model loading state |
-| `GET` | `/api/model/status` | Model architecture, input channels, and active device |
+| `GET` | `/api/health` | Health check & model status |
+| `GET` | `/api/model/status` | Model architecture, input channels (`1`), and device |
 | `GET` | `/api/overview/stats` | Aggregated surveillance telemetry & recent sessions |
 | `POST` | `/api/detect/image` | Base64-encoded image thermal pedestrian inference |
-| `POST` | `/api/detect/image-file` | Multipart file thermal pedestrian inference |
+| `POST` | `/api/detect/image-file` | File-based thermal pedestrian inference |
 | `POST` | `/api/detect/images-batch` | Batch multi-image thermal pedestrian inference |
-| `POST` | `/api/detect/video` | Asynchronous background thermal video processing |
-| `GET` | `/api/detect/video/{id}/status` | Video job progress, frame counter & active detections |
-| `GET` | `/api/history` | Retrieves all archived incident dossiers |
-| `POST` | `/api/history/snapshot` | Logs evidentiary snapshot into database |
-| `DELETE` | `/api/history/{id}` | Deletes a single incident record |
-| `DELETE` | `/api/history` | Purges all detection sessions & event archives |
+| `POST` | `/api/detect/video` | Asynchronous thermal video processing job |
+| `GET` | `/api/detect/video/{id}/status` | Video job progress, frame counters & live metrics |
+| `GET` | `/api/history` | Fetches archived incident events & sessions |
+| `POST` | `/api/history/snapshot` | Saves an evidentiary snapshot to the database |
+| `DELETE` | `/api/history/{id}` | Deletes an individual history event |
+| `DELETE` | `/api/history` | Clears all detection sessions and event records |
 
 ---
 
 ## 🔬 Model Specifications
 
-| Parameter | Specification |
-|---|---|
-| **Base Architecture** | YOLOv8n (Adapted Single-Channel) |
-| **Input Channels** | 1 (Grayscale / Long-Wave Infrared Luminance) |
-| **Layer 0 Conv** | `Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))` |
-| **Target Class** | `person` (ID 0) |
-| **Training Dataset** | FLIR Thermal Surveillance Dataset (26,061 annotated frames) |
-| **Tracking Engine** | ByteTrack with spatial centroid association |
-| **Video Encoding** | H.264 (AVC1) Web-Compatible MP4 with FastStart |
-
----
-
-## 📄 License
-This project is open-source and licensed under the [MIT License](LICENSE).
+- **Architecture:** YOLOv8n (Adapted 1-Channel)
+- **Input Channels:** 1 (Grayscale / Long-Wave Infrared)
+- **First Convolutional Layer:** `Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))`
+- **Target Class:** `person` (Pedestrian Detection)
+- **Training Dataset:** FLIR Thermal Dataset (26,061 frames)
+- **Tracking:** ByteTrack with spatial centroid association
+- **Output Encoding:** Browser-compatible H.264 (AVC1) MP4 with FastStart
