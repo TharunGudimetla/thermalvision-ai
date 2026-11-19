@@ -9,8 +9,11 @@ venv/
 .venv/
 *.log
 
-# Inspection & reports
+# Inspection, reports & experiments
 inspection_report_*.json
+evaluation_results/
+reports/
+scripts/
 
 # Database & Runtime Data
 *.db
@@ -30,6 +33,7 @@ test_extract/
 
 # Extra/duplicate models
 models/
+weights/
 yolov8n.pt
 
 # Node
