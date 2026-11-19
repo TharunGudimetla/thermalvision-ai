@@ -7,6 +7,10 @@ __pycache__/
 env/
 venv/
 .venv/
+*.log
+
+# Inspection & reports
+inspection_report_*.json
 
 # Database & Runtime Data
 *.db
@@ -22,6 +26,11 @@ snapshots/
 backend/uploads/
 backend/outputs/
 backend/snapshots/
+test_extract/
+
+# Extra/duplicate models
+models/
+yolov8n.pt
 
 # Node
 frontend/node_modules/
