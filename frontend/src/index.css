@@ -2,15 +2,20 @@
 
 @layer base {
   :root {
-    --bg-main: #07090e;
-    --bg-card: #0b0f19;
-    --border-subtle: #162032;
+    --bg-main: #04070d;
+    --bg-card: #071322;
+    --bg-card-inner: #050b14;
+    --border-subtle: #11243b;
+    --border-glow: #00e5ff;
     --accent-cyan: #00e5ff;
-    --accent-blue: #0284c7;
+    --accent-cyan-solid: #00c8e6;
+    --accent-blue: #38bdf8;
+    --accent-emerald: #10b981;
+    --accent-coral: #ff5733;
   }
 
   body {
-    background-color: #06080d;
+    background-color: #04070d;
     color: #e2e8f0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
@@ -25,14 +30,14 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #04070d;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #11243b;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #0284c7;
+  background: #00c8e6;
 }
 
 /* Pulse animation for surveillance HUD */
@@ -45,10 +50,155 @@
   animation: hud-blink 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Radar scanline effect */
+/* Radar scanline surveillance grid */
 .surveillance-grid {
-  background-size: 32px 32px;
+  background-size: 36px 36px;
   background-image: 
-    linear-gradient(to right, rgba(14, 165, 233, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(14, 165, 233, 0.04) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0, 229, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 229, 255, 0.035) 1px, transparent 1px);
+}
+
+/* Cyber Glow Helpers */
+.glow-cyan-sm {
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.45));
+}
+.glow-cyan-md {
+  filter: drop-shadow(0 0 12px rgba(0, 229, 255, 0.6));
+}
+
+/* =========================================================================
+   LIGHT MODE THEME SYSTEM
+   Tailored for Thermal Surveillance: Soft slate canvas, clean cards,
+   high-contrast crisp typography, and high-visibility cyan-blue accents.
+   ========================================================================= */
+
+html.light {
+  color-scheme: light;
+}
+
+html.light body {
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+/* Surveillance grid in light mode */
+html.light .surveillance-grid {
+  background-image: 
+    linear-gradient(to right, rgba(2, 132, 199, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(2, 132, 199, 0.05) 1px, transparent 1px);
+}
+
+/* Scrollbars in light mode */
+html.light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Base canvas overrides */
+html.light .bg-\[\#04070d\] {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+html.light .bg-\[\#04070d\]\/95 {
+  background-color: rgba(241, 245, 249, 0.95) !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Primary cards */
+html.light .bg-\[\#080e18\] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -2px rgba(15, 23, 42, 0.03) !important;
+}
+
+/* Sub-cards, toolbars, and containers */
+html.light .bg-\[\#071322\] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Inner wells, preview areas, and icons */
+html.light .bg-\[\#050b14\] {
+  background-color: #edf2f7 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Hover surfaces */
+html.light .hover\:bg-\[\#0c1c30\]:hover,
+html.light .hover\:bg-\[\#0b1c30\]:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Progress bar tracks */
+html.light .bg-\[\#0b1c30\] {
+  background-color: #e2e8f0 !important;
+}
+
+/* Subtle borders */
+html.light .border-\[\#11243b\] {
+  border-color: #e2e8f0 !important;
+}
+
+/* High-contrast crisp typography */
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4,
+html.light .text-white {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-200,
+html.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+html.light .text-slate-400 {
+  color: #64748b !important;
+}
+
+/* Ensure vibrant cyan/blue contrast on light backgrounds */
+html.light .text-\[\#00e5ff\] {
+  color: #0284c7 !important;
+}
+
+html.light .text-\[\#00d2c4\] {
+  color: #0d9488 !important;
+}
+
+html.light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+/* Form input elements in light mode */
+html.light input[type="text"],
+html.light select {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+html.light input[type="text"]::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Colored buttons/badges retain white text */
+html.light .bg-red-500,
+html.light .bg-rose-500,
+html.light .bg-amber-500,
+html.light .bg-blue-600,
+html.light .bg-emerald-500,
+html.light .bg-emerald-600 {
+  color: #ffffff !important;
+}
+
+/* Modals & Backdrop */
+html.light .bg-black\/85,
+html.light .bg-black\/80 {
+  background-color: rgba(15, 23, 42, 0.65) !important;
 }

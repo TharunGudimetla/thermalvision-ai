@@ -62,6 +62,34 @@ def init_db():
     conn.commit()
     conn.close()
 
+def remove_existing_entries_for_filename(filename: str, current_job_id: Optional[str] = None):
+    """If inputs with this filename already exist in the database, delete old records so new data overwrites them."""
+    import re
+    from pathlib import Path
+    conn = get_connection()
+    cursor = conn.cursor()
+    norm_target = re.sub(r'[\s_\-]+', ' ', Path(filename).name).strip().lower()
+
+    # Query candidate sessions to remove matching by exact or normalized filename
+    cursor.execute("SELECT job_id, filename FROM video_sessions")
+    all_sessions = cursor.fetchall()
+    jobs_to_remove = []
+    for row in all_sessions:
+        jid, fname = row[0], row[1]
+        if current_job_id and jid == current_job_id:
+            continue
+        if fname == filename or re.sub(r'[\s_\-]+', ' ', Path(fname).name).strip().lower() == norm_target:
+            jobs_to_remove.append(jid)
+
+    for jid in jobs_to_remove:
+        cursor.execute("DELETE FROM detection_events WHERE job_id = ?", (jid,))
+        cursor.execute("DELETE FROM video_sessions WHERE job_id = ?", (jid,))
+
+    # Also delete any non-job events matching filename
+    cursor.execute("DELETE FROM detection_events WHERE (job_id IS NULL OR job_id = '') AND filename = ?", (filename,))
+    conn.commit()
+    conn.close()
+
 def add_detection_event(
     event_id: str,
     job_id: Optional[str],
@@ -76,6 +104,9 @@ def add_detection_event(
 ):
     if not timestamp:
         timestamp = datetime.now().isoformat()
+
+    # Overwrite prior sessions for this same filename
+    remove_existing_entries_for_filename(filename, current_job_id=job_id)
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -99,6 +130,9 @@ def add_video_session(
 ):
     if not timestamp:
         timestamp = datetime.now().isoformat()
+
+    # Overwrite prior sessions for this same filename
+    remove_existing_entries_for_filename(filename, current_job_id=job_id)
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -166,9 +200,20 @@ def get_overview_stats() -> Dict[str, Any]:
     SELECT job_id, filename, timestamp, total_frames, pedestrian_detections, peak_confidence, snapshot_url, processed_video_url, unique_pedestrians
     FROM video_sessions
     ORDER BY timestamp DESC
-    LIMIT 5
     """)
-    recent_sessions = [dict(r) for r in cursor.fetchall()]
+    all_sessions = [dict(r) for r in cursor.fetchall()]
+
+    import re
+    from pathlib import Path
+    seen_names = set()
+    recent_sessions = []
+    for s in all_sessions:
+        norm = re.sub(r'[\s_\-]+', ' ', Path(s['filename']).name).strip().lower()
+        if norm not in seen_names:
+            seen_names.add(norm)
+            recent_sessions.append(s)
+            if len(recent_sessions) >= 5:
+                break
 
     conn.close()
     return {

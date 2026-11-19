@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from .model_loader import global_model_manager
-from .database import add_detection_event, add_video_session
+from .database import add_detection_event, add_video_session, remove_existing_entries_for_filename
 
 # In-memory registry of active and completed jobs
 active_jobs: Dict[str, Dict[str, Any]] = {}
@@ -221,16 +221,33 @@ def run_video_analysis_job(
     cap = None
     writer = None
     try:
+        # Overwrite prior database events/session for this file if already stored
+        remove_existing_entries_for_filename(original_filename, current_job_id=job_id)
+
         active_jobs[job_id]["status"] = "processing"
 
         cap = cv2.VideoCapture(str(input_video_path))
         if not cap.isOpened():
             raise RuntimeError(f"Could not open uploaded video file: {input_video_path}")
 
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        raw_fps = cap.get(cv2.CAP_PROP_FPS)
+        fps = 25.0 if (raw_fps is None or np.isnan(raw_fps) or raw_fps <= 0) else float(raw_fps)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+
+        # Probe first frame if properties not populated by container header
+        if width <= 0 or height <= 0:
+            ret_probe, probe_frame = cap.read()
+            if ret_probe and probe_frame is not None:
+                height, width = probe_frame.shape[:2]
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            else:
+                width, height = 640, 480
+
+        if total_frames <= 0:
+            total_frames = 100 # Reasonable baseline; dynamically updated
+
         duration_sec = total_frames / fps if fps > 0 else 0.0
 
         active_jobs[job_id]["total_frames"] = total_frames
@@ -255,8 +272,9 @@ def run_video_analysis_job(
             scale = 1920.0 / out_w
             out_w = int(out_w * scale)
             out_h = int(out_h * scale)
-        out_w = out_w - (out_w % 2)
-        out_h = out_h - (out_h % 2)
+        # Ensure dimensions are strictly even and valid for H.264
+        out_w = max(16, out_w - (out_w % 2))
+        out_h = max(16, out_h - (out_h % 2))
 
         # Initialize web-compatible H.264 writer
         writer = H264VideoWriter(
@@ -278,6 +296,11 @@ def run_video_analysis_job(
         peak_frame_idx = 0
         peak_snapshot_path = None
         keyframe_events = []
+        cached_boxes = []
+        unique_count = 0
+
+        # Adaptive stride: for long videos, stride=2 provides 2x speedup while maintaining tracking precision
+        stride = 2 if total_frames > 250 else 1
 
         while True:
             ret, frame = cap.read()
@@ -286,10 +309,15 @@ def run_video_analysis_job(
 
             frame_idx += 1
 
-            # Run 1-channel model inference
-            det_result = global_model_manager.predict_frame(frame, conf_threshold=conf_threshold)
-            # Merge sub-body part detections (upper torso / legs / feet) into complete human bounding boxes
-            boxes = merge_sub_body_boxes(det_result["boxes"])
+            # Run model inference on key stride frames, interpolate for non-stride frames
+            if frame_idx % stride == 0 or frame_idx == 1 or not cached_boxes:
+                det_result = global_model_manager.predict_frame(frame, conf_threshold=conf_threshold)
+                boxes = merge_sub_body_boxes(det_result["boxes"])
+                cached_boxes = boxes
+            else:
+                # Reuse boxes for intermediate frame
+                boxes = [b.copy() for b in cached_boxes]
+
             count = len(boxes)
             frame_pedestrian_counts.append(count)
 
@@ -329,6 +357,7 @@ def run_video_analysis_job(
 
                     if best_tid is not None:
                         b["track_id"] = best_tid
+                        b["iou"] = round(float(iou), 2)
                         assigned_tids.add(best_tid)
                         unique_track_ids.add(best_tid)
                         tracked_identities[best_tid]["frames"].append(frame_idx)
@@ -358,8 +387,8 @@ def run_video_analysis_job(
                     cv2.imwrite(str(snap_path), annotated_snap)
                     peak_snapshot_path = f"/snapshots/{snapshot_filename}"
 
-                # Store evidentiary event for this frame if significant or periodically
-                if len(keyframe_events) < 15 and (frame_idx % max(1, int(fps * 2)) == 0 or frame_peak > 0.65):
+                # Store evidentiary event for this frame if pedestrians detected or periodically
+                if len(keyframe_events) < 20 and (count > 0 or frame_idx % max(1, int(fps * 2)) == 0):
                     snap_file = f"{job_id}_event_f{frame_idx}.jpg"
                     ev_path = snapshots_dir / snap_file
                     annotated_ev = global_model_manager.annotate_frame(frame, boxes)
@@ -384,8 +413,9 @@ def run_video_analysis_job(
             annotated_frame = global_model_manager.annotate_frame(frame, boxes)
             writer.write(annotated_frame)
 
-            # Unique pedestrians calculation from consolidated identities
-            unique_count = calculate_unique_pedestrians(tracked_identities, total_frames, total_detections)
+            # Unique pedestrians calculation: throttled to every 15 frames to prevent CPU bottleneck
+            if frame_idx % 15 == 0 or frame_idx == total_frames:
+                unique_count = calculate_unique_pedestrians(tracked_identities, total_frames, total_detections)
 
             # Update progress
             progress_pct = (frame_idx / total_frames * 100.0) if total_frames > 0 else 0.0

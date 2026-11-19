@@ -27,6 +27,8 @@ export interface DetectionBox {
   class_id: number;
   class_name: string;
   track_id?: number | null;
+  iou?: number;
+  overlap_iou?: number;
 }
 
 export interface FrameDetectionResult {
@@ -35,6 +37,23 @@ export interface FrameDetectionResult {
   boxes: DetectionBox[];
   inference_time_ms: number;
   annotated_image_base64?: string;
+}
+
+export interface BatchImageItemResult {
+  filename: string;
+  status: 'success' | 'error';
+  error?: string;
+  pedestrians_count: number;
+  boxes: DetectionBox[];
+  inference_time_ms: number;
+}
+
+export interface BatchDetectionResponse {
+  total_images: number;
+  successful_images: number;
+  total_pedestrians: number;
+  total_inference_time_ms: number;
+  results: BatchImageItemResult[];
 }
 
 export interface VideoJobProgress {
@@ -59,6 +78,35 @@ export interface VideoJobProgress {
   fps: number;
   duration_seconds: number;
   resolution: string;
+}
+
+export interface HistoryFolderItem {
+  id: string;
+  filename: string;
+  originalUrl?: string;
+  annotatedUrl?: string;
+  snapshotUrl?: string;
+  frameNumber?: number;
+  pedestriansCount: number;
+  confidence: number;
+  inferenceTimeMs?: number;
+  boxes?: DetectionBox[];
+  timestamp: string;
+}
+
+export interface HistoryFolder {
+  id: string;
+  name: string;
+  inputType: 'video' | 'single-image' | 'multiple-images';
+  timestamp: string;
+  jobId?: string;
+  totalItems: number;
+  totalPedestrians: number;
+  peakConfidence: number;
+  processedVideoUrl?: string;
+  originalVideoUrl?: string;
+  coverImageUrl?: string;
+  items: HistoryFolderItem[];
 }
 
 export interface DetectionEvent {

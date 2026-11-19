@@ -2,7 +2,7 @@ import os
 import uuid
 import base64
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 import cv2
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
@@ -118,21 +118,112 @@ async def detect_image_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/detect/images-batch")
+async def detect_images_batch(
+    files: List[UploadFile] = File(...),
+    conf: float = Form(0.25)
+):
+    """
+    Batch thermal pedestrian detection for multiple uploaded images.
+    Independently runs each image through the existing 1-channel YOLOv8 pipeline.
+    Handles per-image errors gracefully without failing the entire batch.
+    """
+    allowed_exts = {".jpg", ".jpeg", ".png"}
+    batch_results = []
+    total_pedestrians = 0
+    total_inference_ms = 0.0
+
+    for file in files:
+        filename = file.filename or "unknown"
+        ext = Path(filename).suffix.lower()
+
+        if ext not in allowed_exts:
+            batch_results.append({
+                "filename": filename,
+                "status": "error",
+                "error": f"Unsupported format: '{ext}'. Supported formats: JPG, JPEG, PNG.",
+                "pedestrians_count": 0,
+                "boxes": [],
+                "inference_time_ms": 0.0
+            })
+            continue
+
+        try:
+            contents = await file.read()
+            nparr = np.frombuffer(contents, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if frame is None:
+                batch_results.append({
+                    "filename": filename,
+                    "status": "error",
+                    "error": "Failed to decode image data",
+                    "pedestrians_count": 0,
+                    "boxes": [],
+                    "inference_time_ms": 0.0
+                })
+                continue
+
+            # Run 1-channel thermal inference
+            res = global_model_manager.predict_frame(frame, conf_threshold=conf)
+            count = res.get("pedestrians_count", 0)
+            inf_time = res.get("inference_time_ms", 0.0)
+
+            total_pedestrians += count
+            total_inference_ms += inf_time
+
+            batch_results.append({
+                "filename": filename,
+                "status": "success",
+                "pedestrians_count": count,
+                "boxes": res.get("boxes", []),
+                "inference_time_ms": inf_time
+            })
+
+        except Exception as e:
+            batch_results.append({
+                "filename": filename,
+                "status": "error",
+                "error": str(e),
+                "pedestrians_count": 0,
+                "boxes": [],
+                "inference_time_ms": 0.0
+            })
+
+    return {
+        "total_images": len(files),
+        "successful_images": sum(1 for r in batch_results if r["status"] == "success"),
+        "total_pedestrians": total_pedestrians,
+        "total_inference_time_ms": round(total_inference_ms, 2),
+        "results": batch_results
+    }
+
 @app.post("/api/detect/video")
 async def detect_video(
     video: UploadFile = File(...),
     conf: float = Form(0.25)
 ):
-    # Validate extension
-    ext = Path(video.filename).suffix.lower()
-    if ext not in [".mp4", ".avi", ".mov", ".mkv", ".webm"]:
+    # Validate video format / extension
+    raw_name = Path(video.filename).name
+    ext = Path(raw_name).suffix.lower()
+    allowed_exts = [
+        ".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".flv",
+        ".wmv", ".ts", ".3gp", ".mpeg", ".mpg", ".ogg", ".asf", ".m2ts"
+    ]
+    if ext and ext not in allowed_exts:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported video format: '{ext}'. Please upload an MP4, AVI, MOV, or WEBM file."
+            detail=f"Unsupported video format: '{ext}'. Supported formats: MP4, AVI, MOV, MKV, WEBM, FLV, WMV, TS, M4V."
         )
 
+    import re
     job_id = str(uuid.uuid4())[:8]
-    save_filename = f"{job_id}_{video.filename}"
+    # Sanitize filename for Windows: remove chars that are illegal on Windows (< > : " / \ | ? *)
+    clean_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', raw_name).strip()
+    if not clean_name or clean_name.startswith('.'):
+        clean_name = f"video_{job_id}{ext if ext else '.mp4'}"
+
+    save_filename = f"{job_id}_{clean_name}"
     upload_path = Path("uploads") / save_filename
 
     try:
@@ -140,21 +231,35 @@ async def detect_video(
             while chunk := await video.read(1024 * 1024): # 1MB chunk
                 f.write(chunk)
 
+        # Validate that the file is actually readable as a video stream
+        test_cap = cv2.VideoCapture(str(upload_path))
+        if not test_cap.isOpened():
+            test_cap.release()
+            upload_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=400,
+                detail=f"The uploaded file '{video.filename}' could not be decoded as a valid video stream. Please ensure the file is not corrupted."
+            )
+        test_cap.release()
+
         # Launch background processing worker
         start_video_processing_thread(
             job_id=job_id,
             input_video_path=upload_path,
-            original_filename=video.filename,
+            original_filename=raw_name,
             conf_threshold=conf
         )
 
         return {
             "job_id": job_id,
-            "filename": video.filename,
+            "filename": raw_name,
             "message": "Video successfully uploaded. 1-Channel analysis started."
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
+        upload_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Failed to save video: {e}")
 
 @app.get("/api/detect/video/{job_id}/status")
@@ -228,7 +333,40 @@ def clear_history():
     return {"success": True, "cleared_count": count}
 
 # Optional: Mount frontend build dist for seamless single-origin deployment
-dist_path = Path("frontend/dist")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+dist_path = (PROJECT_ROOT / "frontend" / "dist").resolve()
+
 if dist_path.exists():
-    app.mount("/", StaticFiles(directory="frontend/dist", html=True), name="frontend")
+    # Mount static assets first
+    assets_dir = dist_path / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    @app.get("/")
+    async def serve_index():
+        index_file = dist_path / "index.html"
+        if index_file.exists():
+            return FileResponse(str(index_file))
+        return JSONResponse({"status": "ready", "service": "Thermal Vision Pedestrian Detection", "docs": "/docs"})
+
+    @app.get("/{full_path:path}")
+    async def serve_spa_fallback(full_path: str):
+        if full_path.startswith(("api", "uploads", "outputs", "snapshots", "docs", "openapi.json", "redoc")):
+            raise HTTPException(status_code=404, detail="Not Found")
+        target_file = dist_path / full_path
+        if target_file.is_file():
+            return FileResponse(str(target_file))
+        index_file = dist_path / "index.html"
+        if index_file.exists():
+            return FileResponse(str(index_file))
+        raise HTTPException(status_code=404, detail="Not Found")
+else:
+    @app.get("/")
+    def serve_fallback():
+        return {
+            "message": "Thermal Vision Pedestrian Detection API is online.",
+            "frontend_dev_url": "http://localhost:5173",
+            "api_docs": "/docs",
+            "health": "/api/health"
+        }
 

@@ -258,8 +258,12 @@ class ThermalModelManager:
             cv2.line(annotated, (x2, y2), (x2 - corner_len, y2), corner_color, thickness)
             cv2.line(annotated, (x2, y2), (x2, y2 - corner_len), corner_color, thickness)
 
-            # Text label: Never show internal tracking IDs on visual output
-            label = f"Pedestrian {int(conf * 100)}%"
+            # Text label: Include IoU metric if tracked
+            iou_val = b.get("iou", None)
+            if iou_val is not None and iou_val > 0:
+                label = f"Pedestrian {int(conf * 100)}% | IoU {iou_val:.2f}"
+            else:
+                label = f"Pedestrian {int(conf * 100)}%"
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 0.45
             (tw, th), baseline = cv2.getTextSize(label, font, font_scale, 1)
