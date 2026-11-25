@@ -582,11 +582,11 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
       </section>
 
       {/* =========================================================================
-          SECTION 3: HEURISTICS YOU CAN READ END TO END (Matches Reference Image 2)
+          SECTION 3: THERMAL DETECTION PIPELINE
          ========================================================================= */}
       <section>
         <h2 className="text-2xl font-bold text-white mb-5 tracking-tight">
-          Heuristics you can read end to end
+          Thermal Detection Pipeline
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -597,9 +597,9 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
                 <Scan className="w-4 h-4 text-[#00e5ff]" />
                 <span className="font-bold">01</span>
               </div>
-              <h3 className="font-bold text-white text-sm mb-1.5">Luminance matrix sampling</h3>
+              <h3 className="font-bold text-white text-sm mb-1.5">Thermal Image Preprocessing</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Extracts downsampled luminance grids across frames, measuring localized differential motion without heavy per-frame tracking overhead.
+                Convert thermal and infrared images into grayscale input suitable for the custom-trained YOLOv8 model.
               </p>
             </div>
           </div>
@@ -611,9 +611,9 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
                 <GitFork className="w-4 h-4 text-[#00e5ff]" />
                 <span className="font-bold">02</span>
               </div>
-              <h3 className="font-bold text-white text-sm mb-1.5">Dual-branch kinematic flow</h3>
+              <h3 className="font-bold text-white text-sm mb-1.5">YOLOv8 Pedestrian Detection</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Evaluates spatial trajectory deviations against an adaptive scene velocity baseline, decoupling camera jitter from acute impact spikes.
+                Identify pedestrians in thermal frames and generate bounding boxes with confidence scores.
               </p>
             </div>
           </div>
@@ -625,9 +625,9 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
                 <Gauge className="w-4 h-4 text-[#00e5ff]" />
                 <span className="font-bold">03</span>
               </div>
-              <h3 className="font-bold text-white text-sm mb-1.5">Severity threshold trigger</h3>
+              <h3 className="font-bold text-white text-sm mb-1.5">ByteTrack Object Tracking</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Dynamic acceleration thresholds filter transient sensor noise while registering acute kinetic collisions with sub-second latency.
+                Associate pedestrian detections across video frames and assign tracking IDs to follow their movement.
               </p>
             </div>
           </div>
@@ -639,9 +639,9 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
                 <Cpu className="w-4 h-4 text-[#00e5ff]" />
                 <span className="font-bold">04</span>
               </div>
-              <h3 className="font-bold text-white text-sm mb-1.5">Auditable forensic vault</h3>
+              <h3 className="font-bold text-white text-sm mb-1.5">Detection Results &amp; Analytics</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Captures timestamped keyframes and telemetry matrices directly into an immutable tamper-evident incident archive.
+                Generate annotated images and videos with pedestrian tracking IDs, detection details, and unique pedestrian counts.
               </p>
             </div>
           </div>
@@ -668,7 +668,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
               {modelStatus?.loaded ? 'Online (Loaded)' : 'Offline / Standby'}
             </div>
             <div className="text-[11px] text-slate-400 font-mono mt-1 truncate">
-              {modelStatus?.model_name || 'Custom YOLOv8 1-Channel'}
+              best.pt
             </div>
           </div>
         </div>
@@ -725,7 +725,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
             <div className="text-2xl font-black text-[#00e5ff] font-mono">
               {stats?.total_pedestrian_detections ?? 0}
             </div>
-            <div className="text-[11px] text-slate-400 font-mono mt-1">Targets logged</div>
+            <div className="text-[11px] text-slate-400 font-mono mt-1">Pedestrian detections</div>
           </div>
         </div>
       </section>
