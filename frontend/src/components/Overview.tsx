@@ -223,22 +223,22 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
           {/* Tag Pill */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#071322] border border-cyan-500/40 text-[11px] font-mono font-semibold text-[#00e5ff] tracking-wider shadow-sm">
             <span className="w-2 h-2 rounded-full bg-[#00e5ff] animate-pulse" />
-            LOCAL VISION ANALYZER (HEURISTIC)
+            AI-POWERED THERMAL SURVEILLANCE
           </div>
 
           {/* Main Huge Title */}
           <div className="space-y-1">
             <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-black text-white tracking-tight leading-[1.12]">
-              Every impact leaves a
+              See Beyond the Visible.
             </h1>
             <div className="text-4xl sm:text-5xl lg:text-[54px] font-black text-[#00e5ff] tracking-tight leading-[1.12]">
-              pixel signature.
+              Detect Every Pedestrian.
             </div>
           </div>
 
           {/* Descriptive Body */}
           <p className="text-sm sm:text-[15px] text-slate-400 leading-relaxed max-w-xl font-normal">
-            Sentinel Vanguard watches a live camera or any uploaded footage, samples it into luminance grids, and flags the exact second a collision breaks the scene's own motion baseline — with the confidence, severity and region written into an auditable incident log.
+            Transform thermal and infrared imagery into actionable visual intelligence. Identify pedestrians, track their movement, and analyze surveillance footage using advanced deep learning and computer vision.
           </p>
 
           {/* Action Buttons Row */}
@@ -248,7 +248,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
               className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-[#00c8e6] hover:bg-[#00e5ff] text-slate-950 font-extrabold text-xs tracking-wider shadow-lg shadow-cyan-950/60 transition-all cursor-pointer transform hover:-translate-y-0.5"
             >
               <ImageIcon className="w-4 h-4 text-slate-950" />
-              <span>LAUNCH IMAGE ANALYZER</span>
+              <span>Analyze an Image</span>
               <ArrowRight className="w-4 h-4 text-slate-950" />
             </button>
 
@@ -257,7 +257,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
               className="flex items-center gap-2 px-5 py-3.5 rounded-xl bg-[#071322] hover:bg-[#0c1c30] border border-[#11243b] hover:border-cyan-500/40 text-slate-200 font-bold text-xs tracking-wide transition-all cursor-pointer"
             >
               <FileText className="w-4 h-4 text-cyan-400" />
-              <span>Analyze a video file</span>
+              <span>Analyze a Video</span>
             </button>
           </div>
 
@@ -265,28 +265,28 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
           <div className="pt-5 flex items-center gap-10 border-t border-[#11243b]">
             <div>
               <div className="text-[10px] font-mono tracking-widest text-slate-500 uppercase font-bold">
-                SAMPLING
+                DETECTION
               </div>
               <div className="text-xs font-mono font-bold text-slate-200 mt-1">
-                25 fps live
+                YOLOv8
               </div>
             </div>
 
             <div>
               <div className="text-[10px] font-mono tracking-widest text-slate-500 uppercase font-bold">
-                GRID
+                TRACKING
               </div>
               <div className="text-xs font-mono font-bold text-slate-200 mt-1">
-                40 × 24 cells
+                ByteTrack
               </div>
             </div>
 
             <div>
               <div className="text-[10px] font-mono tracking-widest text-slate-500 uppercase font-bold">
-                TRIGGER
+                INPUT
               </div>
               <div className="text-xs font-mono font-bold text-slate-200 mt-1">
-                0.3 sensitivity
+                Thermal / IR
               </div>
             </div>
           </div>
@@ -302,11 +302,11 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
               <div className="flex items-center gap-2 text-[#00e5ff]">
                 <Radio className="w-4 h-4 animate-pulse text-[#00e5ff]" />
                 <span className="text-xs font-mono font-bold tracking-wider uppercase">
-                  NETWORK TELEMETRY
+                  THERMAL DETECTION METRICS
                 </span>
               </div>
-              <span className="px-3 py-0.5 rounded-full bg-[#2b0c13] border border-red-500/50 text-red-400 text-[10px] font-mono font-bold uppercase tracking-wider">
-                CRITICAL
+              <span className="px-3 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/50 text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider">
+                SYSTEM STATUS
               </span>
             </div>
 
@@ -315,60 +315,61 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
               {/* Box 1 */}
               <div className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] space-y-1">
                 <div className="text-[10px] font-mono tracking-wider text-slate-500 uppercase font-semibold">
-                  INFERENCE LATENCY
+                  INFERENCE ENGINE
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">
-                  &lt; 35 ms
+                  YOLOv8
                 </div>
                 <div className="text-[11px] font-mono text-slate-400">
-                  Real-time GPU/MPS stream
+                  Custom thermal model
                 </div>
               </div>
 
               {/* Box 2 */}
               <div className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] space-y-1">
                 <div className="text-[10px] font-mono tracking-wider text-slate-500 uppercase font-semibold">
-                  DETECTION ACCURACY
+                  PEDESTRIAN TRACKING
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">
-                  89.2%
+                  ByteTrack
                 </div>
                 <div className="text-[11px] font-mono text-slate-400">
-                  Adaptive Kinematic Model
+                  Identity association
                 </div>
               </div>
 
               {/* Box 3 */}
               <div className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] space-y-1">
                 <div className="text-[10px] font-mono tracking-wider text-slate-500 uppercase font-semibold">
-                  FORENSIC CAPTURE
+                  IMAGE PROCESSING
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">
-                  Instant
+                  1-Channel
                 </div>
                 <div className="text-[11px] font-mono text-slate-400">
-                  Auto-saved tamper proof
+                  Grayscale input
                 </div>
               </div>
 
               {/* Box 4 */}
               <div className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] space-y-1">
                 <div className="text-[10px] font-mono tracking-wider text-slate-500 uppercase font-semibold">
-                  DISPATCH TIME
+                  TARGET CLASS
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-white font-mono">
-                  0.4 sec
+                  Person
                 </div>
                 <div className="text-[11px] font-mono text-slate-400">
-                  Acoustic &amp; Twilio alert
+                  Pedestrian detection
                 </div>
               </div>
             </div>
 
             {/* Bottom Timeline: LAST 7 DAYS */}
             <div className="pt-4 border-t border-[#11243b] relative z-10 space-y-2">
-              <div className="text-[10px] font-mono tracking-wider text-slate-500 uppercase font-semibold">
-                LAST 7 DAYS
+              <div className="flex items-center justify-between text-[10px] font-mono tracking-wider font-semibold">
+                <span className="text-slate-400 uppercase">DETECTION ACTIVITY</span>
+                <span className="text-slate-500 uppercase">LAST 7 DAYS</span>
               </div>
               <div className="flex items-center justify-between gap-1 text-[11px] font-mono">
                 {daysList.map((day, i) => (
