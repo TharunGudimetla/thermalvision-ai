@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Eye,
   X,
-  Folder,
   ArrowLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -31,6 +30,7 @@ import {
   type VideoSessionRecord,
 } from '../services/api';
 import type { VideoJobProgress, DetectionEvent } from '../types';
+import blueFolderImg from '../assets/folder-blue.png';
 
 export const VideoAnalyzer: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -1245,8 +1245,8 @@ export const VideoAnalyzer: React.FC = () => {
             {/* Header: Video Folders List */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#11243b] pb-3">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#071322] border border-cyan-500/50 flex items-center justify-center text-[#00e5ff] shadow-md shadow-cyan-950/40">
-                  <Folder className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-xl bg-[#071322] border border-cyan-500/50 flex items-center justify-center shadow-md shadow-cyan-950/40 p-1">
+                  <img src={blueFolderImg} alt="Folders" className="w-6 h-6 object-contain" />
                 </div>
                 <div>
                   <div className="flex items-center flex-wrap gap-2">
@@ -1300,21 +1300,23 @@ export const VideoAnalyzer: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Center Thumbnail with Blue Folder Icon */}
-                      <div className="w-20 h-16 sm:w-22 sm:h-16 rounded-xl bg-[#050b14] border border-[#11243b] group-hover:border-cyan-400/60 transition-all flex items-center justify-center relative overflow-hidden shadow-md my-auto">
-                        {folder.snapshot_url && !failedThumbnails[folder.job_id] ? (
-                          <>
+                      {/* Center Blue Folder Graphic */}
+                      <div className="w-20 h-20 sm:w-22 sm:h-22 flex items-center justify-center relative my-auto">
+                        <img
+                          src={blueFolderImg}
+                          alt={folder.filename}
+                          className="w-full h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-300"
+                        />
+                        {/* Video frame preview inset inside the folder */}
+                        {folder.snapshot_url && !failedThumbnails[folder.job_id] && (
+                          <div className="absolute inset-x-2.5 bottom-1.5 h-6 rounded overflow-hidden border border-sky-400/50 bg-black/70 shadow-sm">
                             <img
                               src={getMediaUrl(folder.snapshot_url)}
                               alt={folder.filename}
                               onError={() => setFailedThumbnails((prev) => ({ ...prev, [folder.job_id]: true }))}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
                             />
-                            <div className="absolute inset-0 bg-black/25 pointer-events-none" />
-                            <Folder className="absolute bottom-1 right-1 w-3.5 h-3.5 text-[#00e5ff] drop-shadow" />
-                          </>
-                        ) : (
-                          <Folder className="w-10 h-10 text-[#00e5ff] group-hover:scale-110 transition-transform" />
+                          </div>
                         )}
                       </div>
 
@@ -1340,7 +1342,7 @@ export const VideoAnalyzer: React.FC = () => {
               </div>
             ) : (
               <div className="p-8 rounded-xl bg-[#080e18] border border-dashed border-[#11243b] text-center">
-                <Folder className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <img src={blueFolderImg} alt="No folders" className="w-14 h-14 object-contain mx-auto mb-2 opacity-80" />
                 <div className="text-sm font-medium text-slate-300 mb-1">
                   No video folders recorded yet
                 </div>
