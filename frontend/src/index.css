@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
@@ -201,4 +202,45 @@ html.light .bg-emerald-600 {
 html.light .bg-black\/85,
 html.light .bg-black\/80 {
   background-color: rgba(15, 23, 42, 0.65) !important;
+}
+
+/* =========================================================================
+   WHITE & BLUE ACTION CARDS (Thermal Image & Video Analysis)
+   Guarantees clean white background, high contrast slate text, and blue accents
+   in light mode, while respecting dark mode cleanly.
+   ========================================================================= */
+html.light .white-blue-action-card {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.04) !important;
+}
+
+html.light .white-blue-action-card h3 {
+  color: #0f172a !important;
+}
+
+html.light .white-blue-action-card p {
+  color: #475569 !important;
+}
+
+html.light .white-blue-action-card li {
+  color: #334155 !important;
+}
+
+html.dark .white-blue-action-card {
+  background-color: #080e18 !important;
+  border-color: #11243b !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 229, 255, 0.05) !important;
+}
+
+html.dark .white-blue-action-card h3 {
+  color: #ffffff !important;
+}
+
+html.dark .white-blue-action-card p {
+  color: #94a3b8 !important;
+}
+
+html.dark .white-blue-action-card li {
+  color: #cbd5e1 !important;
 }

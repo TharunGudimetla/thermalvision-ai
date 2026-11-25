@@ -458,7 +458,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
           {/* Card 1: Thermal Image Analysis */}
           <div
             onClick={() => onNavigate('image')}
-            className="group cursor-pointer rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080e18] border border-slate-200/90 dark:border-[#11243b] hover:border-sky-400 dark:hover:border-cyan-500/50 transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between shadow-lg shadow-slate-200/40 dark:shadow-xl dark:shadow-cyan-950/20"
+            className="white-blue-action-card group cursor-pointer rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080e18] border border-slate-200/90 dark:border-[#11243b] hover:border-sky-400 dark:hover:border-cyan-500/50 transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between shadow-lg shadow-slate-200/40 dark:shadow-xl dark:shadow-cyan-950/20"
           >
             <div>
               {/* Image Preview with Badges */}
@@ -482,30 +482,28 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
 
               {/* Description */}
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
-                Analyze individual thermal images using YOLOv8 to identify pedestrians and visualize detection results.
+                Upload a thermal or infrared image to identify pedestrians using the custom-trained YOLOv8 model. View detected objects with bounding boxes and confidence scores.
               </p>
 
-              {/* Features (Horizontal Row with Blue Check Circles) */}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-800 dark:text-slate-300 mb-6">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>Pedestrian Detection</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>Bounding Boxes</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>Confidence Scores</span>
-                </div>
-              </div>
+              {/* Features (Vertical list with blue checkmark icons matching reference) */}
+              <ul className="space-y-2.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300 mb-6">
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>AI-powered pedestrian detection</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>Bounding box visualization</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>Detection confidence scores</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>Processed image results</span>
+                </li>
+              </ul>
             </div>
 
             {/* Pill Action Button */}
@@ -527,7 +525,7 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
           {/* Card 2: Thermal Video Analysis */}
           <div
             onClick={() => onNavigate('video')}
-            className="group cursor-pointer rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080e18] border border-slate-200/90 dark:border-[#11243b] hover:border-sky-400 dark:hover:border-cyan-500/50 transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between shadow-lg shadow-slate-200/40 dark:shadow-xl dark:shadow-cyan-950/20"
+            className="white-blue-action-card group cursor-pointer rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080e18] border border-slate-200/90 dark:border-[#11243b] hover:border-sky-400 dark:hover:border-cyan-500/50 transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between shadow-lg shadow-slate-200/40 dark:shadow-xl dark:shadow-cyan-950/20"
           >
             <div>
               {/* Video Preview with Player Mockup & Badges */}
@@ -574,30 +572,28 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
 
               {/* Description */}
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
-                Process thermal video frame by frame using YOLOv8 and ByteTrack to detect and track pedestrians.
+                Upload a thermal or infrared video and process it frame by frame using YOLOv8 and ByteTrack. Detect pedestrians, track their movement, and generate an annotated video with tracking IDs and pedestrian statistics.
               </p>
 
-              {/* Features (Horizontal Row with Blue Check Circles) */}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-800 dark:text-slate-300 mb-6">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>Frame-by-frame Detection</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>Persistent Tracking IDs</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  </div>
-                  <span>Unique Pedestrian Counting</span>
-                </div>
-              </div>
+              {/* Features (Vertical list with blue checkmark icons matching reference) */}
+              <ul className="space-y-2.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300 mb-6">
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>Frame-by-frame pedestrian detection</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>Automatic pedestrian tracking IDs</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>Annotated video with bounding boxes</span>
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[#0284c7] dark:text-[#00e5ff] flex-shrink-0 stroke-[2.5]" />
+                  <span>Unique pedestrian count and detection results</span>
+                </li>
+              </ul>
             </div>
 
             {/* Pill Action Button */}
