@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import type { OverviewStats, DetectionEvent, HistoryFolder, HistoryFolderItem } from '../types';
 import { getMediaUrl } from '../services/api';
+import thermalImagePreview from '../assets/thermal-image-preview.jpg';
+import thermalVideoPreview from '../assets/thermal-video-preview.jpg';
 
 interface OverviewProps {
   stats: OverviewStats | null;
@@ -483,71 +485,44 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
                 IMAGE VIEW
               </div>
 
-              {/* Vector Graphic: Road Perspective with Cyan & Amber Lines */}
-              <div className="h-32 w-full rounded-xl bg-[#050b14] border border-[#11243b] mb-5 relative flex items-center justify-center overflow-hidden">
-                <svg className="w-full h-full" viewBox="0 0 360 140" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="horizonDisc" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#0a192f" />
-                      <stop offset="100%" stopColor="#040711" />
-                    </linearGradient>
-                    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
-                      <feGaussianBlur stdDeviation="3" result="blur" />
-                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                    <filter id="glowAmber" x="-20%" y="-20%" width="140%" height="140%">
-                      <feGaussianBlur stdDeviation="3" result="blur" />
-                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                  </defs>
-
-                  {/* Horizon Elliptical Ring */}
-                  <ellipse cx="180" cy="38" rx="46" ry="12" fill="url(#horizonDisc)" stroke="#0284c7" strokeWidth="1.2" opacity="0.8" />
-                  <ellipse cx="180" cy="38" rx="20" ry="5" fill="#0369a1" fillOpacity="0.3" />
-
-                  {/* Road Boundary Perspective Lines */}
-                  <path d="M 0 140 L 145 38 L 215 38 L 360 140" fill="none" stroke="#131e33" strokeWidth="1.5" />
-                  <path d="M 50 140 L 155 38" fill="none" stroke="#101d36" strokeWidth="1" />
-                  <path d="M 310 140 L 205 38" fill="none" stroke="#101d36" strokeWidth="1" />
-
-                  {/* Center Line */}
-                  <line x1="180" y1="140" x2="180" y2="38" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 6" />
-
-                  {/* Left Cyan Streaks */}
-                  <line x1="120" y1="140" x2="168" y2="38" stroke="#38bdf8" strokeWidth="2.5" filter="url(#glowCyan)" />
-                  <line x1="140" y1="140" x2="173" y2="38" stroke="#0ea5e9" strokeWidth="1.5" opacity="0.9" />
-
-                  {/* Right Amber Streaks */}
-                  <line x1="240" y1="140" x2="192" y2="38" stroke="#f59e0b" strokeWidth="2.5" filter="url(#glowAmber)" />
-                  <line x1="220" y1="140" x2="187" y2="38" stroke="#d97706" strokeWidth="1.5" opacity="0.9" />
-                </svg>
+              {/* Thermal Image Preview */}
+              <div className="h-44 sm:h-48 w-full rounded-xl bg-[#050b14] border border-[#11243b] mb-5 relative flex items-center justify-center overflow-hidden">
+                <img
+                  src={thermalImagePreview}
+                  alt="Thermal Image Analysis Preview"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
               </div>
 
               <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">
-                Thermal image analyzer
+                Thermal Image Analysis
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                Connect a webcam or run a procedural scenario at 1.6 fps. Tracker brackets, a threat meter and an audio alert fire the moment the signal spikes, and the incident is filed automatically.
+                Upload a thermal or infrared image to identify pedestrians using the custom-trained YOLOv8 model. View detected objects with bounding boxes and confidence scores.
               </p>
 
               <ul className="space-y-2 text-xs text-slate-300 mb-6">
                 <li className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Webcam + 4 simulator scenarios</span>
+                  <span>AI-powered pedestrian detection</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>On-screen tracker &amp; threat meter</span>
+                  <span>Bounding box visualization</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Auto-filed incidents</span>
+                  <span>Detection confidence scores</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
+                  <span>Processed image results</span>
                 </li>
               </ul>
             </div>
 
             <div className="pt-4 border-t border-[#11243b] flex items-center justify-between text-xs font-semibold text-[#00e5ff] group-hover:text-cyan-300">
-              <span className="tracking-wider uppercase font-mono">OPEN LIVE MONITOR</span>
+              <span className="tracking-wider uppercase font-mono">OPEN IMAGE ANALYZER</span>
               <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1.5 transition-transform" />
             </div>
           </div>
@@ -562,61 +537,38 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
                 VIDEO UPLOAD VIEW
               </div>
 
-              {/* Vector Graphic: Road Perspective with Cyan & Red Lines */}
-              <div className="h-32 w-full rounded-xl bg-[#050b14] border border-[#11243b] mb-5 relative flex items-center justify-center overflow-hidden">
-                <svg className="w-full h-full" viewBox="0 0 360 140" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="horizonDiscRed" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#240c12" />
-                      <stop offset="100%" stopColor="#040711" />
-                    </linearGradient>
-                    <filter id="glowRed" x="-20%" y="-20%" width="140%" height="140%">
-                      <feGaussianBlur stdDeviation="3" result="blur" />
-                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                    </filter>
-                  </defs>
-
-                  {/* Horizon Elliptical Ring */}
-                  <ellipse cx="180" cy="38" rx="46" ry="12" fill="url(#horizonDiscRed)" stroke="#ef4444" strokeWidth="1.2" opacity="0.8" />
-                  <ellipse cx="180" cy="38" rx="20" ry="5" fill="#dc2626" fillOpacity="0.3" />
-
-                  {/* Road Boundary Perspective Lines */}
-                  <path d="M 0 140 L 145 38 L 215 38 L 360 140" fill="none" stroke="#131e33" strokeWidth="1.5" />
-                  <path d="M 50 140 L 155 38" fill="none" stroke="#101d36" strokeWidth="1" />
-                  <path d="M 310 140 L 205 38" fill="none" stroke="#101d36" strokeWidth="1" />
-
-                  {/* Center Line */}
-                  <line x1="180" y1="140" x2="180" y2="38" stroke="#1e293b" strokeWidth="1" strokeDasharray="4 6" />
-
-                  {/* Left Cyan Streaks */}
-                  <line x1="120" y1="140" x2="168" y2="38" stroke="#38bdf8" strokeWidth="2.5" filter="url(#glowCyan)" />
-                  <line x1="140" y1="140" x2="173" y2="38" stroke="#0ea5e9" strokeWidth="1.5" opacity="0.9" />
-
-                  {/* Right Red Streaks */}
-                  <line x1="240" y1="140" x2="192" y2="38" stroke="#ef4444" strokeWidth="2.5" filter="url(#glowRed)" />
-                  <line x1="220" y1="140" x2="187" y2="38" stroke="#dc2626" strokeWidth="1.5" opacity="0.9" />
-                </svg>
+              {/* Thermal Video Preview */}
+              <div className="h-44 sm:h-48 w-full rounded-xl bg-[#050b14] border border-[#11243b] mb-5 relative flex items-center justify-center overflow-hidden">
+                <img
+                  src={thermalVideoPreview}
+                  alt="Thermal Video Analysis Preview"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
               </div>
 
               <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">
-                Forensic video ingestion
+                Thermal Video Analysis
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                Drop an MP4, WebM or MOV and the whole clip is sampled frame by frame. You get collision markers on the scrubber, keyframe clippings and a full report card you can save to the archive.
+                Upload a thermal or infrared video and process it frame by frame using YOLOv8 and ByteTrack. Detect pedestrians, track their movement, and generate an annotated video with tracking IDs and pedestrian statistics.
               </p>
 
               <ul className="space-y-2 text-xs text-slate-300 mb-6">
                 <li className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Timestamped collision markers</span>
+                  <span>Frame-by-frame pedestrian detection</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Keyframe clipping gallery</span>
+                  <span>Automatic pedestrian tracking IDs</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Report card + JSON &amp; PDF export</span>
+                  <span>Annotated video with bounding boxes</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
+                  <span>Unique pedestrian count and detection results</span>
                 </li>
               </ul>
             </div>
