@@ -2,8 +2,8 @@ import os
 import uuid
 import threading
 from pathlib import Path
-from typing import Dict, Any, Optional
-from datetime import datetime
+from typing import Dict, Any, Optional, List, Tuple
+from datetime import datetime, timedelta
 import cv2
 import numpy as np
 
@@ -15,6 +15,61 @@ active_jobs: Dict[str, Dict[str, Any]] = {}
 
 def get_job_status(job_id: str) -> Optional[Dict[str, Any]]:
     return active_jobs.get(job_id)
+
+
+def compute_perceptual_hash(frame: np.ndarray, hash_size: int = 8) -> int:
+    """
+    Computes a 64-bit difference perceptual hash (dHash) for an image frame.
+    dHash is invariant to minor lighting variations, scale, and sensor noise.
+    """
+    if len(frame.shape) == 3:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = frame
+    resized = cv2.resize(gray, (hash_size + 1, hash_size), interpolation=cv2.INTER_AREA)
+    diff = resized[:, 1:] > resized[:, :-1]
+    h = 0
+    for val in diff.flatten():
+        h = (h << 1) | int(val)
+    return h
+
+
+def is_visually_duplicate_frame(
+    candidate_hash: int,
+    candidate_count: int,
+    candidate_centroids: List[Tuple[float, float]],
+    saved_history: List[Tuple[int, int, List[Tuple[float, float]]]],
+    max_hamming_distance: int = 3,
+    centroid_threshold: float = 16.0
+) -> bool:
+    """
+    Determines if candidate frame is visually identical or near-identical to an already-saved frame in this video.
+    Returns True if duplicate (should be skipped), False if unique (should be saved).
+    """
+    for prev_hash, prev_count, prev_centroids in saved_history:
+        # If pedestrian count differs, this is a distinct detection state
+        if candidate_count != prev_count:
+            continue
+
+        # Compute hamming distance between 64-bit perceptual hashes
+        xor_diff = candidate_hash ^ prev_hash
+        dist = bin(xor_diff).count("1")
+
+        if dist <= max_hamming_distance:
+            # Perceptual hash is visually near-identical.
+            # If 0 detections, visual near-identity means duplicate background frame
+            if candidate_count == 0:
+                return True
+
+            # If same number of detections, verify centroid displacement
+            if len(candidate_centroids) == len(prev_centroids):
+                displacements = [
+                    ((c1[0] - c2[0])**2 + (c1[1] - c2[1])**2)**0.5
+                    for c1, c2 in zip(candidate_centroids, prev_centroids)
+                ]
+                if all(d < centroid_threshold for d in displacements):
+                    return True
+    return False
 
 
 def compute_box_iou(boxA: list, boxB: list) -> float:
@@ -261,6 +316,10 @@ def run_video_analysis_job(
         snapshots_dir = Path("snapshots")
         snapshots_dir.mkdir(parents=True, exist_ok=True)
 
+        # Dedicated isolated folder for frames extracted from this specific video upload
+        video_frames_dir = snapshots_dir / job_id / "frames"
+        video_frames_dir.mkdir(parents=True, exist_ok=True)
+
         output_filename = f"{job_id}_annotated.mp4"
         output_video_path = outputs_dir / output_filename
 
@@ -298,6 +357,9 @@ def run_video_analysis_job(
         keyframe_events = []
         cached_boxes = []
         unique_count = 0
+        # Dedicated per-video record for duplicate frame detection using perceptual hashing
+        saved_frame_records: List[Tuple[int, int, List[Tuple[float, float]]]] = []
+        job_start_time = datetime.now()
 
         # Adaptive stride: for long videos, stride=2 provides 2x speedup while maintaining tracking precision
         stride = 2 if total_frames > 250 else 1
@@ -380,34 +442,50 @@ def run_video_analysis_job(
                     peak_conf = frame_peak
                     peak_frame_idx = frame_idx
 
-                    # Save peak snapshot
-                    snapshot_filename = f"{job_id}_peak_frame_{frame_idx}.jpg"
-                    snap_path = snapshots_dir / snapshot_filename
+                    # Save peak snapshot into dedicated frames folder
+                    snapshot_filename = f"peak_frame_{frame_idx}.jpg"
+                    snap_path = video_frames_dir / snapshot_filename
                     annotated_snap = global_model_manager.annotate_frame(frame, boxes)
                     cv2.imwrite(str(snap_path), annotated_snap)
-                    peak_snapshot_path = f"/snapshots/{snapshot_filename}"
+                    peak_snapshot_path = f"/snapshots/{job_id}/frames/{snapshot_filename}"
 
-                # Store evidentiary event for this frame if pedestrians detected or periodically
-                if len(keyframe_events) < 20 and (count > 0 or frame_idx % max(1, int(fps * 2)) == 0):
-                    snap_file = f"{job_id}_event_f{frame_idx}.jpg"
-                    ev_path = snapshots_dir / snap_file
-                    annotated_ev = global_model_manager.annotate_frame(frame, boxes)
-                    cv2.imwrite(str(ev_path), annotated_ev)
+                # Evidentiary frame extraction with perceptual duplicate suppression
+                # Candidates: frames with pedestrian detections, or sampled every 2 seconds
+                if count > 0 or frame_idx % max(1, int(fps * 2)) == 0:
+                    frame_hash = compute_perceptual_hash(frame)
+                    cur_centroids = [
+                        ((b["x1"] + b["x2"]) / 2.0, (b["y1"] + b["y2"]) / 2.0)
+                        for b in boxes
+                    ]
 
-                    event_id = str(uuid.uuid4())
-                    ev_data = {
-                        "event_id": event_id,
-                        "job_id": job_id,
-                        "filename": original_filename,
-                        "frame_number": frame_idx,
-                        "pedestrians_count": count,
-                        "confidence": float(frame_peak),
-                        "snapshot_url": f"/snapshots/{snap_file}",
-                        "processed_video_url": f"/outputs/{output_filename}",
-                        "unique_pedestrians": calculate_unique_pedestrians(tracked_identities, total_frames, total_detections)
-                    }
-                    keyframe_events.append(ev_data)
-                    add_detection_event(**ev_data)
+                    # Check against previously saved frames for this video to skip near-identical duplicates
+                    if not is_visually_duplicate_frame(frame_hash, count, cur_centroids, saved_frame_records):
+                        # Unique frame! Save into isolated video frames folder
+                        frame_file = f"frame_{frame_idx:05d}.jpg"
+                        ev_path = video_frames_dir / frame_file
+                        annotated_ev = global_model_manager.annotate_frame(frame, boxes)
+                        cv2.imwrite(str(ev_path), annotated_ev)
+
+                        # Record for future duplicate comparisons
+                        saved_frame_records.append((frame_hash, count, cur_centroids))
+
+                        # Preserve frame sequence and original timestamp
+                        frame_time = (job_start_time + timedelta(seconds=frame_idx / fps)).isoformat()
+                        event_id = str(uuid.uuid4())
+                        ev_data = {
+                            "event_id": event_id,
+                            "job_id": job_id,
+                            "filename": original_filename,
+                            "frame_number": frame_idx,
+                            "timestamp": frame_time,
+                            "pedestrians_count": count,
+                            "confidence": float(frame_peak),
+                            "snapshot_url": f"/snapshots/{job_id}/frames/{frame_file}",
+                            "processed_video_url": f"/outputs/{output_filename}",
+                            "unique_pedestrians": calculate_unique_pedestrians(tracked_identities, total_frames, total_detections)
+                        }
+                        keyframe_events.append(ev_data)
+                        add_detection_event(**ev_data)
 
             # Annotate and write to H.264 video
             annotated_frame = global_model_manager.annotate_frame(frame, boxes)
@@ -444,10 +522,10 @@ def run_video_analysis_job(
             ret_mid, frame_mid = cap_mid.read()
             cap_mid.release()
             if ret_mid and frame_mid is not None:
-                mid_filename = f"{job_id}_thumbnail.jpg"
-                mid_path = snapshots_dir / mid_filename
+                mid_filename = "thumbnail.jpg"
+                mid_path = video_frames_dir / mid_filename
                 cv2.imwrite(str(mid_path), frame_mid)
-                peak_snapshot_path = f"/snapshots/{mid_filename}"
+                peak_snapshot_path = f"/snapshots/{job_id}/frames/{mid_filename}"
 
         # Record session in database with both unique pedestrians and total detection instances
         add_video_session(

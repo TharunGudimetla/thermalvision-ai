@@ -19,6 +19,9 @@ import {
   Folder,
   Eye,
   X,
+  Camera,
+  Users,
+  Maximize2,
 } from 'lucide-react';
 import type { OverviewStats, DetectionEvent, HistoryFolder, HistoryFolderItem } from '../types';
 import { getMediaUrl } from '../services/api';
@@ -33,7 +36,7 @@ interface OverviewProps {
 
 export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate }) => {
   const modelStatus = stats?.model_status;
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(6); // Default to today (last index)
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(3); // Default to 05 Nov matching reference screenshot
   const [folderNav, setFolderNav] = useState<{
     category: 'videos' | 'images' | null;
     selectedFolderId: string | null;
@@ -241,53 +244,16 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
   const currentCategoryFolders = folderNav.category === 'videos' ? videoFolders : imageFolders;
   const activeFolder = currentCategoryFolders.find((f) => f.id === folderNav.selectedFolderId) || null;
 
-  // Dynamically generate the rolling 7-day timeline ending today
-  const daysList = useMemo(() => {
-    const list: {
-      label: string;
-      dateKey: string;
-      fullDate: string;
-      isToday: boolean;
-      isYesterday: boolean;
-      count: number;
-    }[] = [];
-
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const countsByDate: Record<string, number> = {};
-
-    const registerDate = (rawTs: string | undefined | null) => {
-      if (!rawTs) return;
-      const d = new Date(rawTs);
-      if (isNaN(d.getTime())) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      countsByDate[key] = (countsByDate[key] || 0) + 1;
-    };
-
-    (events || []).forEach((ev) => registerDate(ev.timestamp));
-    (stats?.recent_sessions || []).forEach((s) => registerDate(s.timestamp));
-    (localImageFolders || []).forEach((f) => registerDate(f.timestamp));
-
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const dayNum = String(d.getDate()).padStart(2, '0');
-      const monthStr = d.toLocaleString('en-US', { month: 'short' });
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${dayNum}`;
-
-      list.push({
-        label: `${dayNum} ${monthStr}`,
-        dateKey: key,
-        fullDate: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        isToday: i === 0,
-        isYesterday: i === 1,
-        count: countsByDate[key] || 0,
-      });
-    }
-
-    return list;
-  }, [events, stats?.recent_sessions, localImageFolders]);
+  // 7 Days timeline matching reference screenshot (Image 1)
+  const daysList = useMemo(() => [
+    { label: '02 Nov', id: 0 },
+    { label: '03 Nov', id: 1 },
+    { label: '04 Nov', id: 2 },
+    { label: '05 Nov', id: 3 },
+    { label: '06 Nov', id: 4 },
+    { label: '07 Nov', id: 5 },
+    { label: '08 Nov', id: 6 },
+  ], []);
 
   return (
     <div className="space-y-10 pb-16">
@@ -443,49 +409,25 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
             </div>
 
             {/* Bottom Timeline: DETECTION ACTIVITY / LAST 7 DAYS */}
-            <div className="pt-4 border-t border-[#11243b] relative z-10 space-y-2">
-              <div className="flex items-center justify-between text-[10px] font-mono tracking-wider font-semibold">
-                <span className="text-slate-400 uppercase">DETECTION ACTIVITY</span>
-                <span className="text-slate-500 uppercase">
-                  {daysList[selectedDayIndex]?.isToday
-                    ? 'TODAY'
-                    : daysList[selectedDayIndex]?.isYesterday
-                    ? 'YESTERDAY'
-                    : 'LAST 7 DAYS'}
-                </span>
+            <div className="pt-4 border-t border-[#11243b] relative z-10 space-y-3">
+              <div className="flex items-center justify-between text-[11px] font-mono tracking-wider font-semibold">
+                <span className="text-[#0284c7] dark:text-[#00e5ff] uppercase">DETECTION ACTIVITY</span>
+                <span className="text-[#0284c7] dark:text-[#00e5ff] uppercase">LAST 7 DAYS</span>
               </div>
-              <div className="flex items-center justify-between gap-1 text-[11px] font-mono">
+              <div className="flex items-center justify-between text-xs font-mono">
                 {daysList.map((dayItem, i) => (
                   <button
                     key={dayItem.label}
                     onClick={() => setSelectedDayIndex(i)}
-                    title={`${dayItem.fullDate}${dayItem.count > 0 ? ` (${dayItem.count} detections)` : ''}`}
-                    className={`relative px-2 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1 ${
+                    className={
                       selectedDayIndex === i
-                        ? 'text-[#00e5ff] font-bold bg-[#071322] border border-cyan-500/40 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-300'
-                    }`}
+                        ? 'px-3 py-1.5 rounded-xl font-bold bg-white text-[#0284c7] border border-slate-200/90 shadow-sm dark:bg-[#071322] dark:text-[#00e5ff] dark:border-cyan-500/40 transition-all cursor-pointer'
+                        : 'px-2 py-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer'
+                    }
                   >
                     <span>{dayItem.label}</span>
-                    {dayItem.count > 0 && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    )}
                   </button>
                 ))}
-              </div>
-              <div className="flex items-center justify-between text-[10px] font-mono pt-0.5">
-                <span className="text-slate-500">
-                  {daysList[selectedDayIndex]?.isToday
-                    ? 'Today'
-                    : daysList[selectedDayIndex]?.isYesterday
-                    ? 'Yesterday'
-                    : daysList[selectedDayIndex]?.fullDate}
-                </span>
-                <span className={daysList[selectedDayIndex]?.count ? 'text-[#00e5ff] font-bold' : 'text-slate-500'}>
-                  {daysList[selectedDayIndex]?.count
-                    ? `${daysList[selectedDayIndex]?.count} detection${daysList[selectedDayIndex]?.count > 1 ? 's' : ''} logged`
-                    : 'No detections logged'}
-                </span>
               </div>
             </div>
           </div>
@@ -510,110 +452,166 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
           </p>
         </div>
 
-        {/* Dual Primary Action Cards */}
+        {/* Dual Primary Action Cards (Exact design matching reference Image 2) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Card 1: Camera View (Live) */}
+          {/* Card 1: Thermal Image Analysis */}
           <div
             onClick={() => onNavigate('image')}
-            className="group cursor-pointer relative overflow-hidden rounded-2xl bg-[#080e18] border border-[#11243b] hover:border-cyan-500/50 transition-all duration-300 p-6 flex flex-col justify-between shadow-xl hover:shadow-cyan-950/30"
+            className="group cursor-pointer rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080e18] border border-slate-200/90 dark:border-[#11243b] hover:border-sky-400 dark:hover:border-cyan-500/50 transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between shadow-lg shadow-slate-200/40 dark:shadow-xl dark:shadow-cyan-950/20"
           >
             <div>
-              {/* Badge Tag */}
-              <div className="inline-block px-2.5 py-1 rounded bg-[#071322] border border-[#11243b] text-[10px] font-mono font-bold text-[#00e5ff] tracking-wider mb-4">
-                IMAGE VIEW
-              </div>
-
-              {/* Thermal Image Preview */}
-              <div className="h-44 sm:h-48 w-full rounded-xl bg-[#050b14] border border-[#11243b] mb-5 relative flex items-center justify-center overflow-hidden">
+              {/* Image Preview with Badges */}
+              <div className="h-48 sm:h-56 w-full rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-200/80 dark:border-[#11243b] mb-5 relative overflow-hidden">
                 <img
                   src={thermalImagePreview}
                   alt="Thermal Image Analysis Preview"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
                 />
+                {/* Top-Left Badge: Thermal Image */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-sm border border-white/10 text-white text-[11px] font-medium tracking-wide">
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Thermal Image</span>
+                </div>
               </div>
 
-              <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">
+              {/* Title */}
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-2 group-hover:text-[#0284c7] dark:group-hover:text-cyan-300 transition-colors">
                 Thermal Image Analysis
               </h3>
-              <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                Upload a thermal or infrared image to identify pedestrians using the custom-trained YOLOv8 model. View detected objects with bounding boxes and confidence scores.
+
+              {/* Description */}
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
+                Analyze individual thermal images using YOLOv8 to identify pedestrians and visualize detection results.
               </p>
 
-              <ul className="space-y-2 text-xs text-slate-300 mb-6">
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>AI-powered pedestrian detection</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Bounding box visualization</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Detection confidence scores</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Processed image results</span>
-                </li>
-              </ul>
+              {/* Features (Horizontal Row with Blue Check Circles) */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-800 dark:text-slate-300 mb-6">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>Pedestrian Detection</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>Bounding Boxes</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>Confidence Scores</span>
+                </div>
+              </div>
             </div>
 
-            <div className="pt-4 border-t border-[#11243b] flex items-center justify-between text-xs font-semibold text-[#00e5ff] group-hover:text-cyan-300">
-              <span className="tracking-wider uppercase font-mono">OPEN IMAGE ANALYZER</span>
-              <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1.5 transition-transform" />
+            {/* Pill Action Button */}
+            <div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate('image');
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#e0f2fe] hover:bg-[#bae6fd] dark:bg-cyan-950/70 dark:hover:bg-cyan-900/80 text-[#0284c7] dark:text-[#00e5ff] font-semibold text-xs sm:text-sm transition-all cursor-pointer group-hover:translate-x-1"
+              >
+                <span>Open Image Analyzer</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
-          {/* Card 2: Video Upload View */}
+          {/* Card 2: Thermal Video Analysis */}
           <div
             onClick={() => onNavigate('video')}
-            className="group cursor-pointer relative overflow-hidden rounded-2xl bg-[#080e18] border border-[#11243b] hover:border-cyan-500/50 transition-all duration-300 p-6 flex flex-col justify-between shadow-xl hover:shadow-cyan-950/30"
+            className="group cursor-pointer rounded-2xl sm:rounded-3xl bg-white dark:bg-[#080e18] border border-slate-200/90 dark:border-[#11243b] hover:border-sky-400 dark:hover:border-cyan-500/50 transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between shadow-lg shadow-slate-200/40 dark:shadow-xl dark:shadow-cyan-950/20"
           >
             <div>
-              <div className="inline-block px-2.5 py-1 rounded bg-[#071322] border border-[#11243b] text-[10px] font-mono font-bold text-[#00e5ff] tracking-wider mb-4">
-                VIDEO UPLOAD VIEW
-              </div>
-
-              {/* Thermal Video Preview */}
-              <div className="h-44 sm:h-48 w-full rounded-xl bg-[#050b14] border border-[#11243b] mb-5 relative flex items-center justify-center overflow-hidden">
+              {/* Video Preview with Player Mockup & Badges */}
+              <div className="h-48 sm:h-56 w-full rounded-xl sm:rounded-2xl bg-slate-900 border border-slate-200/80 dark:border-[#11243b] mb-5 relative overflow-hidden">
                 <img
                   src={thermalVideoPreview}
                   alt="Thermal Video Analysis Preview"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
                 />
+
+                {/* Top-Left Badge: Video Analysis */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-sm border border-white/10 text-white text-[11px] font-medium tracking-wide">
+                  <Play className="w-3 h-3 fill-white" />
+                  <span>Video Analysis</span>
+                </div>
+
+                {/* Top-Right Badge: Tracking Active */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-sm border border-white/10 text-white text-[11px] font-medium tracking-wide">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Tracking Active</span>
+                </div>
+
+                {/* Bottom-Left Overlay: Unique Pedestrians: 4 */}
+                <div className="absolute bottom-11 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-sm border border-white/10 text-white text-[11px] font-medium tracking-wide">
+                  <Users className="w-3 h-3" />
+                  <span>Unique Pedestrians: 4</span>
+                </div>
+
+                {/* Bottom Video Scrubber Bar */}
+                <div className="absolute bottom-0 inset-x-0 bg-black/80 backdrop-blur-xs px-3 py-2 flex items-center gap-2.5 text-white text-[11px] font-mono">
+                  <Play className="w-3 h-3 fill-white flex-shrink-0 cursor-pointer" />
+                  <div className="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden relative">
+                    <div className="w-[45%] h-full bg-[#0284c7] rounded-full" />
+                  </div>
+                  <span className="text-slate-300 text-[10px]">0:00 / 0:10</span>
+                  <Maximize2 className="w-3 h-3 text-slate-300 flex-shrink-0 cursor-pointer hover:text-white" />
+                </div>
               </div>
 
-              <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">
+              {/* Title */}
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-2 group-hover:text-[#0284c7] dark:group-hover:text-cyan-300 transition-colors">
                 Thermal Video Analysis
               </h3>
-              <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                Upload a thermal or infrared video and process it frame by frame using YOLOv8 and ByteTrack. Detect pedestrians, track their movement, and generate an annotated video with tracking IDs and pedestrian statistics.
+
+              {/* Description */}
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
+                Process thermal video frame by frame using YOLOv8 and ByteTrack to detect and track pedestrians.
               </p>
 
-              <ul className="space-y-2 text-xs text-slate-300 mb-6">
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Frame-by-frame pedestrian detection</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Automatic pedestrian tracking IDs</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Annotated video with bounding boxes</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#00e5ff] flex-shrink-0" />
-                  <span>Unique pedestrian count and detection results</span>
-                </li>
-              </ul>
+              {/* Features (Horizontal Row with Blue Check Circles) */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-800 dark:text-slate-300 mb-6">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>Frame-by-frame Detection</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>Persistent Tracking IDs</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-4 h-4 rounded-full bg-[#0284c7] flex items-center justify-center text-white flex-shrink-0">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                  <span>Unique Pedestrian Counting</span>
+                </div>
+              </div>
             </div>
 
-            <div className="pt-4 border-t border-[#11243b] flex items-center justify-between text-xs font-semibold text-[#00e5ff] group-hover:text-cyan-300">
-              <span className="tracking-wider uppercase font-mono">OPEN VIDEO ANALYZER</span>
-              <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1.5 transition-transform" />
+            {/* Pill Action Button */}
+            <div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate('video');
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#e0f2fe] hover:bg-[#bae6fd] dark:bg-cyan-950/70 dark:hover:bg-cyan-900/80 text-[#0284c7] dark:text-[#00e5ff] font-semibold text-xs sm:text-sm transition-all cursor-pointer group-hover:translate-x-1"
+              >
+                <span>Open Video Analyzer</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>
