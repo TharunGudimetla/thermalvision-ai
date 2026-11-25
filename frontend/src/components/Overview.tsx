@@ -201,16 +201,53 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
     return deduplicated;
   }, [events, localImageFolders, stats?.recent_sessions]);
 
-  // 7 Days list matching reference screenshot
-  const daysList = [
-    '02 Nov',
-    '03 Nov',
-    '04 Nov',
-    '05 Nov',
-    '06 Nov',
-    '07 Nov',
-    '08 Nov',
-  ];
+  // Dynamically generate the rolling 7-day timeline ending today
+  const daysList = useMemo(() => {
+    const list: {
+      label: string;
+      dateKey: string;
+      fullDate: string;
+      isToday: boolean;
+      isYesterday: boolean;
+      count: number;
+    }[] = [];
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const countsByDate: Record<string, number> = {};
+
+    const registerDate = (rawTs: string | undefined | null) => {
+      if (!rawTs) return;
+      const d = new Date(rawTs);
+      if (isNaN(d.getTime())) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      countsByDate[key] = (countsByDate[key] || 0) + 1;
+    };
+
+    (events || []).forEach((ev) => registerDate(ev.timestamp));
+    (stats?.recent_sessions || []).forEach((s) => registerDate(s.timestamp));
+    (localImageFolders || []).forEach((f) => registerDate(f.timestamp));
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dayNum = String(d.getDate()).padStart(2, '0');
+      const monthStr = d.toLocaleString('en-US', { month: 'short' });
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${dayNum}`;
+
+      list.push({
+        label: `${dayNum} ${monthStr}`,
+        dateKey: key,
+        fullDate: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        isToday: i === 0,
+        isYesterday: i === 1,
+        count: countsByDate[key] || 0,
+      });
+    }
+
+    return list;
+  }, [events, stats?.recent_sessions, localImageFolders]);
 
   return (
     <div className="space-y-10 pb-16">
@@ -365,26 +402,50 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
               </div>
             </div>
 
-            {/* Bottom Timeline: LAST 7 DAYS */}
+            {/* Bottom Timeline: DETECTION ACTIVITY / LAST 7 DAYS */}
             <div className="pt-4 border-t border-[#11243b] relative z-10 space-y-2">
               <div className="flex items-center justify-between text-[10px] font-mono tracking-wider font-semibold">
                 <span className="text-slate-400 uppercase">DETECTION ACTIVITY</span>
-                <span className="text-slate-500 uppercase">LAST 7 DAYS</span>
+                <span className="text-slate-500 uppercase">
+                  {daysList[selectedDayIndex]?.isToday
+                    ? 'TODAY'
+                    : daysList[selectedDayIndex]?.isYesterday
+                    ? 'YESTERDAY'
+                    : 'LAST 7 DAYS'}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-1 text-[11px] font-mono">
-                {daysList.map((day, i) => (
+                {daysList.map((dayItem, i) => (
                   <button
-                    key={day}
+                    key={dayItem.label}
                     onClick={() => setSelectedDayIndex(i)}
-                    className={`px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                    title={`${dayItem.fullDate}${dayItem.count > 0 ? ` (${dayItem.count} detections)` : ''}`}
+                    className={`relative px-2 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1 ${
                       selectedDayIndex === i
                         ? 'text-[#00e5ff] font-bold bg-[#071322] border border-cyan-500/40 shadow-sm'
                         : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
-                    {day}
+                    <span>{dayItem.label}</span>
+                    {dayItem.count > 0 && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    )}
                   </button>
                 ))}
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono pt-0.5">
+                <span className="text-slate-500">
+                  {daysList[selectedDayIndex]?.isToday
+                    ? 'Today'
+                    : daysList[selectedDayIndex]?.isYesterday
+                    ? 'Yesterday'
+                    : daysList[selectedDayIndex]?.fullDate}
+                </span>
+                <span className={daysList[selectedDayIndex]?.count ? 'text-[#00e5ff] font-bold' : 'text-slate-500'}>
+                  {daysList[selectedDayIndex]?.count
+                    ? `${daysList[selectedDayIndex]?.count} detection${daysList[selectedDayIndex]?.count > 1 ? 's' : ''} logged`
+                    : 'No detections logged'}
+                </span>
               </div>
             </div>
           </div>
