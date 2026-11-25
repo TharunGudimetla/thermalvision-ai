@@ -16,14 +16,20 @@ export function App() {
   const [historyEvents, setHistoryEvents] = useState<DetectionEvent[]>([]);
   const [backendError, setBackendError] = useState<boolean>(false);
 
-  // Theme Management with localStorage persistence
+  // Theme Management: Light mode is the default on every first open.
+  // If the user toggles to dark mode, it is remembered for their active session.
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('thermal_theme') as 'dark' | 'light') || 'dark';
+    const sessionTheme = sessionStorage.getItem('thermal_theme') as 'dark' | 'light';
+    if (sessionTheme === 'dark' || sessionTheme === 'light') {
+      return sessionTheme;
+    }
+    return 'light';
   });
 
   const toggleTheme = () => {
     setTheme((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
+      sessionStorage.setItem('thermal_theme', next);
       localStorage.setItem('thermal_theme', next);
       return next;
     });
