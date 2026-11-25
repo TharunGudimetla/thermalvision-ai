@@ -105,6 +105,7 @@ async def detect_image_file(
     conf: float = Form(0.25)
 ):
     try:
+        import re
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -113,6 +114,50 @@ async def detect_image_file(
             raise HTTPException(status_code=400, detail="Invalid image file")
 
         res = global_model_manager.predict_frame(frame, conf_threshold=conf)
+
+        # Persistent storage: Save original image and annotated detection result
+        img_id = str(uuid.uuid4())[:8]
+        raw_name = Path(file.filename or "image.jpg").name
+        clean_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', raw_name).strip()
+        if not clean_name:
+            clean_name = f"image_{img_id}.jpg"
+
+        orig_filename = f"{img_id}_{clean_name}"
+        orig_path = Path("uploads") / orig_filename
+        with open(orig_path, "wb") as f:
+            f.write(contents)
+
+        # Generate and save annotated image with bounding boxes
+        annotated_frame = global_model_manager.annotate_frame(frame, res.get("boxes", []))
+        annotated_filename = f"{img_id}_annotated_{clean_name}"
+        if not annotated_filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+            annotated_filename += ".jpg"
+        annotated_path = Path("snapshots") / annotated_filename
+        cv2.imwrite(str(annotated_path), annotated_frame)
+
+        # Convert annotated frame to base64 for direct preview compatibility
+        _, buffer = cv2.imencode('.jpg', annotated_frame)
+        res["annotated_image_base64"] = f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
+        res["original_url"] = f"/uploads/{orig_filename}"
+        res["annotated_url"] = f"/snapshots/{annotated_filename}"
+
+        # Persist event in SQLite database
+        boxes = res.get("boxes", [])
+        max_conf = max([b.get("confidence", 0) for b in boxes], default=0.0)
+        peds_count = res.get("pedestrians_count", 0)
+
+        add_detection_event(
+            event_id=img_id,
+            job_id=None,
+            filename=clean_name,
+            frame_number=1,
+            pedestrians_count=peds_count,
+            confidence=max_conf,
+            snapshot_url=f"/snapshots/{annotated_filename}",
+            processed_video_url=f"/uploads/{orig_filename}",
+            unique_pedestrians=peds_count
+        )
+
         return res
 
     except Exception as e:
@@ -172,12 +217,48 @@ async def detect_images_batch(
             total_pedestrians += count
             total_inference_ms += inf_time
 
+            # Persistent storage: Save original image and annotated detection result
+            import re
+            img_id = str(uuid.uuid4())[:8]
+            clean_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', Path(filename).name).strip()
+            if not clean_name:
+                clean_name = f"image_{img_id}.jpg"
+
+            orig_filename = f"{img_id}_{clean_name}"
+            orig_path = Path("uploads") / orig_filename
+            with open(orig_path, "wb") as f:
+                f.write(contents)
+
+            annotated_frame = global_model_manager.annotate_frame(frame, res.get("boxes", []))
+            annotated_filename = f"{img_id}_annotated_{clean_name}"
+            if not annotated_filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                annotated_filename += ".jpg"
+            annotated_path = Path("snapshots") / annotated_filename
+            cv2.imwrite(str(annotated_path), annotated_frame)
+
+            boxes = res.get("boxes", [])
+            max_conf = max([b.get("confidence", 0) for b in boxes], default=0.0)
+
+            add_detection_event(
+                event_id=img_id,
+                job_id=None,
+                filename=clean_name,
+                frame_number=1,
+                pedestrians_count=count,
+                confidence=max_conf,
+                snapshot_url=f"/snapshots/{annotated_filename}",
+                processed_video_url=f"/uploads/{orig_filename}",
+                unique_pedestrians=count
+            )
+
             batch_results.append({
                 "filename": filename,
                 "status": "success",
                 "pedestrians_count": count,
-                "boxes": res.get("boxes", []),
-                "inference_time_ms": inf_time
+                "boxes": boxes,
+                "inference_time_ms": inf_time,
+                "original_url": f"/uploads/{orig_filename}",
+                "annotated_url": f"/snapshots/{annotated_filename}"
             })
 
         except Exception as e:

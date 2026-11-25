@@ -2,6 +2,9 @@ import React, { useState, useMemo } from 'react';
 import {
   Image as ImageIcon,
   ArrowRight,
+  ArrowLeft,
+  ChevronRight,
+  Play,
   ShieldCheck,
   Cpu,
   Layers,
@@ -14,7 +17,6 @@ import {
   GitFork,
   Gauge,
   Folder,
-  FolderOpen,
   Eye,
   X,
 } from 'lucide-react';
@@ -31,8 +33,14 @@ interface OverviewProps {
 
 export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate }) => {
   const modelStatus = stats?.model_status;
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(6); // Default to '08 Nov' (last index)
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set());
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(6); // Default to today (last index)
+  const [folderNav, setFolderNav] = useState<{
+    category: 'videos' | 'images' | null;
+    selectedFolderId: string | null;
+  }>({
+    category: null,
+    selectedFolderId: null,
+  });
   const [selectedEnlargedMedia, setSelectedEnlargedMedia] = useState<{
     url: string;
     title: string;
@@ -40,19 +48,9 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
   } | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
-  const toggleFolder = (folderId: string) => {
-    setExpandedFolderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-      return next;
-    });
-  };
+  const normalizeFileKey = (name: string) => name.toLowerCase().replace(/[\s_\-]+/g, ' ').trim();
 
-  // 1. Load LocalStorage Image Folders
+  // 1. Load LocalStorage Image Folders (for session fallback)
   const localImageFolders = useMemo<HistoryFolder[]>(() => {
     try {
       const raw = localStorage.getItem('thermal_image_folders');
@@ -62,90 +60,83 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
     }
   }, []);
 
-  // 2. Build Video Folders & Group Each Input as an Organized Folder
-  // If an input is already stored in the database, overwrite with the new data!
-  const inputFolders = useMemo<HistoryFolder[]>(() => {
-    // Sort events descending by timestamp so newest sessions appear first
+  // 2. Build Video Folders: Strictly one folder per uploaded video
+  const videoFolders = useMemo<HistoryFolder[]>(() => {
     const sortedEventsDesc = [...(events || [])].sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
 
-    const normalizeFileKey = (name: string) => name.toLowerCase().replace(/[\s_\-]+/g, ' ').trim();
     const videoGroups: { [normKey: string]: { latestJobId: string; displayFilename: string; events: DetectionEvent[] } } = {};
 
     sortedEventsDesc.forEach((ev) => {
       const isVideo =
-        Boolean(ev.job_id) ||
-        Boolean(ev.processed_video_url) ||
-        /\.(mp4|avi|mov|mkv|webm|flv|wmv|ts)$/i.test(ev.filename);
+        Boolean(ev.job_id && !ev.job_id.startsWith('img_')) ||
+        Boolean(ev.processed_video_url && ev.processed_video_url.endsWith('.mp4')) ||
+        /\.(mp4|avi|mov|mkv|webm|flv|wmv|ts|3gp|m4v)$/i.test(ev.filename);
 
       if (isVideo) {
         const normKey = normalizeFileKey(ev.filename);
         if (!videoGroups[normKey]) {
-          // Newest session for this normalized filename (overwrites prior duplicates)
           videoGroups[normKey] = {
             latestJobId: ev.job_id || normKey,
             displayFilename: ev.filename,
             events: [ev],
           };
         } else if (ev.job_id && ev.job_id === videoGroups[normKey].latestJobId) {
-          // Additional events belonging to the newest session
           videoGroups[normKey].events.push(ev);
         }
       }
     });
 
-    const videoFoldersList: HistoryFolder[] = Object.values(videoGroups).map(
-      (groupData) => {
-        const groupEvents = groupData.events;
-        const filename = groupData.displayFilename;
-        const firstEv = groupEvents[0];
-        const peakConf = Math.max(...groupEvents.map((e) => e.confidence || 0));
-        const maxPeds = Math.max(
-          ...groupEvents.map((e) => e.unique_pedestrians || e.pedestrians_count || 0)
-        );
+    const list: HistoryFolder[] = Object.values(videoGroups).map((groupData) => {
+      const groupEvents = groupData.events;
+      const filename = groupData.displayFilename;
+      const firstEv = groupEvents[0];
+      const peakConf = Math.max(...groupEvents.map((e) => e.confidence || 0));
+      const maxPeds = Math.max(
+        ...groupEvents.map((e) => e.unique_pedestrians || e.pedestrians_count || 0)
+      );
 
-        const sortedEvents = [...groupEvents].sort(
-          (a, b) => (a.frame_number || 0) - (b.frame_number || 0)
-        );
+      const sortedEvents = [...groupEvents].sort(
+        (a, b) => (a.frame_number || 0) - (b.frame_number || 0)
+      );
 
-        const items: HistoryFolderItem[] = sortedEvents.map((e) => ({
-          id: e.id,
-          filename: e.filename,
-          snapshotUrl: e.snapshot_url,
-          frameNumber: e.frame_number,
-          pedestriansCount: e.pedestrians_count,
-          confidence: e.confidence,
-          timestamp: e.timestamp,
-        }));
+      const items: HistoryFolderItem[] = sortedEvents.map((e) => ({
+        id: e.id,
+        filename: e.filename,
+        snapshotUrl: e.snapshot_url,
+        frameNumber: e.frame_number,
+        pedestriansCount: e.pedestrians_count,
+        confidence: e.confidence,
+        timestamp: e.timestamp,
+      }));
 
-        const cleanJobId = groupData.latestJobId;
+      const cleanJobId = groupData.latestJobId;
 
-        return {
-          id: `video-folder-${cleanJobId}`,
-          name: filename,
-          inputType: 'video',
-          timestamp: firstEv.timestamp,
-          jobId: cleanJobId,
-          totalItems: groupEvents.length,
-          totalPedestrians: maxPeds,
-          peakConfidence: peakConf,
-          processedVideoUrl: firstEv.processed_video_url || `/outputs/${cleanJobId}_annotated.mp4`,
-          originalVideoUrl: `/uploads/${cleanJobId}_${firstEv.filename}`,
-          coverImageUrl: firstEv.snapshot_url,
-          items,
-        };
-      }
-    );
+      return {
+        id: `video-folder-${cleanJobId}`,
+        name: filename,
+        inputType: 'video',
+        timestamp: firstEv.timestamp,
+        jobId: cleanJobId,
+        totalItems: groupEvents.length,
+        totalPedestrians: maxPeds,
+        peakConfidence: peakConf,
+        processedVideoUrl: firstEv.processed_video_url || `/outputs/${cleanJobId}_annotated.mp4`,
+        originalVideoUrl: `/uploads/${cleanJobId}_${firstEv.filename}`,
+        coverImageUrl: firstEv.snapshot_url,
+        items,
+      };
+    });
 
-    // If events didn't have entries yet, fallback to stats.recent_sessions (deduplicated by normalized filename)
-    if (videoFoldersList.length === 0 && stats?.recent_sessions) {
+    // Fallback to stats.recent_sessions if needed
+    if (list.length === 0 && stats?.recent_sessions) {
       const seenFilenames = new Set<string>();
       stats.recent_sessions.forEach((sess) => {
         const norm = normalizeFileKey(sess.filename);
         if (!seenFilenames.has(norm)) {
           seenFilenames.add(norm);
-          videoFoldersList.push({
+          list.push({
             id: `video-folder-${sess.job_id}`,
             name: sess.filename,
             inputType: 'video',
@@ -174,34 +165,81 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
       });
     }
 
-    // Deduplicate local image folders by name (keeping newest overwrite)
-    const uniqueImageFolders: HistoryFolder[] = [];
-    const seenImageNames = new Set<string>();
-    localImageFolders.forEach((f) => {
-      const norm = normalizeFileKey(f.name);
-      if (!seenImageNames.has(norm)) {
-        seenImageNames.add(norm);
-        uniqueImageFolders.push(f);
+    return list;
+  }, [events, stats?.recent_sessions]);
+
+  // 3. Build Image Folders: Strictly one folder per uploaded image
+  const imageFolders = useMemo<HistoryFolder[]>(() => {
+    const imgGroups: { [normKey: string]: HistoryFolder } = {};
+
+    // First load from persistent backend events
+    (events || []).forEach((ev) => {
+      const isVideo =
+        Boolean(ev.job_id && !ev.job_id.startsWith('img_')) ||
+        Boolean(ev.processed_video_url && ev.processed_video_url.endsWith('.mp4')) ||
+        /\.(mp4|avi|mov|mkv|webm|flv|wmv|ts|3gp|m4v)$/i.test(ev.filename);
+
+      if (!isVideo) {
+        const normKey = normalizeFileKey(ev.filename);
+        if (!imgGroups[normKey]) {
+          const origUrl = ev.processed_video_url || ev.snapshot_url;
+          const annotUrl = ev.snapshot_url;
+          imgGroups[normKey] = {
+            id: `image-folder-${ev.id}`,
+            name: ev.filename,
+            inputType: 'single-image',
+            timestamp: ev.timestamp,
+            totalItems: 2,
+            totalPedestrians: ev.pedestrians_count || 0,
+            peakConfidence: ev.confidence || 0,
+            originalVideoUrl: origUrl,
+            processedVideoUrl: annotUrl,
+            coverImageUrl: annotUrl,
+            items: [
+              {
+                id: `${ev.id}-orig`,
+                filename: `Original — ${ev.filename}`,
+                originalUrl: origUrl,
+                snapshotUrl: origUrl,
+                pedestriansCount: ev.pedestrians_count || 0,
+                confidence: ev.confidence || 0,
+                timestamp: ev.timestamp,
+              },
+              {
+                id: `${ev.id}-annot`,
+                filename: `Detection Result — ${ev.filename}`,
+                annotatedUrl: annotUrl,
+                snapshotUrl: annotUrl,
+                pedestriansCount: ev.pedestrians_count || 0,
+                confidence: ev.confidence || 0,
+                timestamp: ev.timestamp,
+              },
+            ],
+          };
+        }
       }
     });
 
-    const all = [...uniqueImageFolders, ...videoFoldersList].sort(
+    // Merge any localStorage image folders if present
+    localImageFolders.forEach((f) => {
+      const normKey = normalizeFileKey(f.name);
+      if (!imgGroups[normKey]) {
+        imgGroups[normKey] = f;
+      }
+    });
+
+    return Object.values(imgGroups).sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
+  }, [events, localImageFolders]);
 
-    // Ensure strict deduplication across all types (image + video) so duplicates are never shown
-    const deduplicated: HistoryFolder[] = [];
-    const seenAllNorm = new Set<string>();
-    for (const f of all) {
-      const norm = normalizeFileKey(f.name);
-      if (!seenAllNorm.has(norm)) {
-        seenAllNorm.add(norm);
-        deduplicated.push(f);
-      }
-    }
+  // Combined inputFolders
+  const inputFolders = useMemo<HistoryFolder[]>(() => {
+    return [...videoFolders, ...imageFolders];
+  }, [videoFolders, imageFolders]);
 
-    return deduplicated;
-  }, [events, localImageFolders, stats?.recent_sessions]);
+  const currentCategoryFolders = folderNav.category === 'videos' ? videoFolders : imageFolders;
+  const activeFolder = currentCategoryFolders.find((f) => f.id === folderNav.selectedFolderId) || null;
 
   // Dynamically generate the rolling 7-day timeline ending today
   const daysList = useMemo(() => {
@@ -731,22 +769,23 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
       </section>
 
       {/* =========================================================================
-          SECTION 5: INPUT EVIDENCE FOLDERS & ORGANIZED FRAMES
+          SECTION 5: EVIDENCE FOLDERS (Simple 2-Category Organization)
          ========================================================================= */}
       <section className="space-y-4">
+        {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
           <div>
             <div className="text-[10px] font-mono tracking-widest text-slate-500 uppercase font-semibold">
-              LATEST ACTIVITY
+              ORGANIZED FILE SYSTEM
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-              <span>Input Evidence Folders</span>
+              <span>Evidence Folders</span>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981]">
                 {inputFolders.length} Folders
               </span>
             </h2>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
-              Each input is organized into its own folder. Open any folder to inspect its extracted frames.
+              Persistent folder-based storage for videos and images with isolated frame sequences.
             </p>
           </div>
           <button
@@ -758,193 +797,419 @@ export const Overview: React.FC<OverviewProps> = ({ stats, events, onNavigate })
           </button>
         </div>
 
-        {inputFolders.length > 0 ? (
-          <div className="space-y-4">
-            {/* Square Boxes Medium Icons Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {inputFolders.map((folder) => {
-                const isExpanded = expandedFolderIds.has(folder.id);
-                const isVideo = folder.inputType === 'video';
-                const isMulti = folder.inputType === 'multiple-images';
-                const hasPeds = folder.totalPedestrians > 0;
+        {/* 1. INITIAL VIEW: Exactly Two Main Options (Videos and Images) */}
+        {!folderNav.category && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
+            {/* Option 1: Videos */}
+            <div
+              onClick={() => setFolderNav({ category: 'videos', selectedFolderId: null })}
+              className="group cursor-pointer rounded-2xl bg-[#080e18] hover:bg-[#071322] border border-[#11243b] hover:border-cyan-500/50 transition-all duration-300 p-6 flex flex-col justify-between shadow-xl hover:shadow-cyan-950/30 relative overflow-hidden"
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-xl bg-[#050b14] border border-[#11243b] group-hover:border-cyan-500/50 flex items-center justify-center text-[#00e5ff] shadow-md transition-colors">
+                    <Film className="w-6 h-6" />
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-blue-950/80 text-blue-300 border border-blue-500/30">
+                    {videoFolders.length} Video Folder{videoFolders.length === 1 ? '' : 's'}
+                  </span>
+                </div>
 
-                return (
-                  <div
-                    key={folder.id}
-                    onClick={() => toggleFolder(folder.id)}
-                    className={`group aspect-square rounded-2xl bg-[#080e18] hover:bg-[#071322] border transition-all cursor-pointer p-3.5 flex flex-col items-center justify-between text-center relative overflow-hidden shadow-lg ${
-                      isExpanded
-                        ? 'border-cyan-400 ring-2 ring-cyan-400/50 shadow-cyan-950/50 bg-[#071322]'
-                        : 'border-[#11243b] hover:border-cyan-500/50 hover:shadow-cyan-950/30'
-                    }`}
-                  >
-                    {/* Top Status & Type Badges */}
-                    <div className="w-full flex items-center justify-between text-[9px] font-mono">
-                      <span className={`px-1.5 py-0.5 rounded font-bold ${
-                        isVideo ? 'bg-blue-950/80 text-blue-300 border border-blue-500/30' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
-                      }`}>
-                        {isVideo ? 'VIDEO' : isMulti ? 'BATCH' : 'IMG'}
-                      </span>
+                <div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors flex items-center gap-2">
+                    <Folder className="w-5 h-5 text-[#00e5ff]" />
+                    <span>Videos</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-relaxed mt-2">
+                    Open the video folder view. Every uploaded video has its own folder containing the recorded video file and its corresponding extracted frames.
+                  </p>
+                </div>
+              </div>
 
-                      <div className="flex items-center gap-1">
+              <div className="pt-6 border-t border-[#11243b] mt-6 flex items-center justify-between text-xs font-semibold text-[#00e5ff] group-hover:text-cyan-300 font-mono">
+                <span>OPEN VIDEOS FOLDER VIEW</span>
+                <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1.5 transition-transform" />
+              </div>
+            </div>
+
+            {/* Option 2: Images */}
+            <div
+              onClick={() => setFolderNav({ category: 'images', selectedFolderId: null })}
+              className="group cursor-pointer rounded-2xl bg-[#080e18] hover:bg-[#071322] border border-[#11243b] hover:border-cyan-500/50 transition-all duration-300 p-6 flex flex-col justify-between shadow-xl hover:shadow-cyan-950/30 relative overflow-hidden"
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-xl bg-[#050b14] border border-[#11243b] group-hover:border-cyan-500/50 flex items-center justify-center text-[#00e5ff] shadow-md transition-colors">
+                    <ImageIcon className="w-6 h-6" />
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
+                    {imageFolders.length} Image Folder{imageFolders.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors flex items-center gap-2">
+                    <Folder className="w-5 h-5 text-[#00e5ff]" />
+                    <span>Images</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-relaxed mt-2">
+                    Open the image folder view. Every uploaded image has its own folder containing the original thermal image and its processed YOLOv8 detection result.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-[#11243b] mt-6 flex items-center justify-between text-xs font-semibold text-[#00e5ff] group-hover:text-cyan-300 font-mono">
+                <span>OPEN IMAGES FOLDER VIEW</span>
+                <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1.5 transition-transform" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. CATEGORY FOLDERS LIST: Shows folders inside the chosen category */}
+        {folderNav.category && !folderNav.selectedFolderId && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            {/* Breadcrumb Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-[#080e18] border border-[#11243b]">
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <button
+                  onClick={() => setFolderNav({ category: null, selectedFolderId: null })}
+                  className="text-slate-400 hover:text-[#00e5ff] flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Evidence Folders</span>
+                </button>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                <span className="text-[#00e5ff] font-bold uppercase">
+                  {folderNav.category === 'videos' ? 'Videos' : 'Images'}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981] ml-1.5">
+                  {currentCategoryFolders.length} Folders
+                </span>
+              </div>
+
+              <button
+                onClick={() => setFolderNav({ category: null, selectedFolderId: null })}
+                className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors self-start sm:self-center"
+              >
+                <span>Back to Categories</span>
+              </button>
+            </div>
+
+            {/* Folders Grid */}
+            {currentCategoryFolders.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {currentCategoryFolders.map((folder) => {
+                  const isVideo = folderNav.category === 'videos';
+                  const hasPeds = folder.totalPedestrians > 0;
+
+                  return (
+                    <div
+                      key={folder.id}
+                      onClick={() => setFolderNav({ category: folderNav.category, selectedFolderId: folder.id })}
+                      className="group aspect-square rounded-2xl bg-[#080e18] hover:bg-[#071322] border border-[#11243b] hover:border-cyan-500/50 hover:shadow-cyan-950/30 transition-all cursor-pointer p-3.5 flex flex-col items-center justify-between text-center relative overflow-hidden shadow-lg"
+                    >
+                      {/* Top Badges */}
+                      <div className="w-full flex items-center justify-between text-[9px] font-mono">
+                        <span className={`px-1.5 py-0.5 rounded font-bold ${
+                          isVideo ? 'bg-blue-950/80 text-blue-300 border border-blue-500/30' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
+                        }`}>
+                          {isVideo ? 'VIDEO' : 'IMAGE'}
+                        </span>
                         <span className={`px-1.5 py-0.5 rounded font-bold ${
                           hasPeds ? 'bg-red-950/80 text-red-400 border border-red-500/30' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
                         }`}>
                           {hasPeds ? `${folder.totalPedestrians} Ped` : 'Clear'}
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onNavigate('history', folder.id);
-                          }}
-                          title="Open in full Forensic Vault"
-                          className="p-0.5 rounded hover:bg-cyan-950 text-slate-500 hover:text-[#00e5ff] transition-colors"
-                        >
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
                       </div>
-                    </div>
 
-                    {/* Center: Medium Icon Box */}
-                    <div className="w-20 h-16 sm:w-22 sm:h-16 rounded-xl bg-[#050b14] border border-[#11243b] group-hover:border-cyan-400/60 transition-all flex items-center justify-center relative overflow-hidden shadow-md my-auto">
-                      {folder.coverImageUrl && !failedImages[folder.id] ? (
-                        <>
-                          <img
-                            src={getMediaUrl(folder.coverImageUrl)}
-                            alt={folder.name}
-                            onError={() => setFailedImages((prev) => ({ ...prev, [folder.id]: true }))}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-black/25 pointer-events-none" />
-                          {isExpanded ? (
-                            <FolderOpen className="absolute bottom-1 right-1 w-3.5 h-3.5 text-[#00e5ff] drop-shadow" />
-                          ) : (
+                      {/* Center Thumbnail */}
+                      <div className="w-20 h-16 sm:w-22 sm:h-16 rounded-xl bg-[#050b14] border border-[#11243b] group-hover:border-cyan-400/60 transition-all flex items-center justify-center relative overflow-hidden shadow-md my-auto">
+                        {folder.coverImageUrl && !failedImages[folder.id] ? (
+                          <>
+                            <img
+                              src={getMediaUrl(folder.coverImageUrl)}
+                              alt={folder.name}
+                              onError={() => setFailedImages((prev) => ({ ...prev, [folder.id]: true }))}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-black/25 pointer-events-none" />
                             <Folder className="absolute bottom-1 right-1 w-3.5 h-3.5 text-[#00e5ff] drop-shadow" />
-                          )}
-                        </>
-                      ) : isExpanded ? (
-                        <FolderOpen className="w-10 h-10 text-[#00e5ff] group-hover:scale-110 transition-transform" />
-                      ) : (
-                        <Folder className="w-10 h-10 text-[#00e5ff] group-hover:scale-110 transition-transform" />
-                      )}
-                    </div>
+                          </>
+                        ) : (
+                          <Folder className="w-10 h-10 text-[#00e5ff] group-hover:scale-110 transition-transform" />
+                        )}
+                      </div>
 
-                    {/* Bottom: Name & Item Count */}
-                    <div className="w-full space-y-0.5">
-                      <div
-                        title={folder.name}
-                        className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors w-full px-1"
-                      >
-                        {folder.name}
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1.5">
-                        <span>{folder.items.length || folder.totalItems} {isVideo ? 'frames' : 'items'}</span>
-                        <span>•</span>
-                        <span className="text-[#00e5ff]">{(folder.peakConfidence * 100).toFixed(0)}%</span>
+                      {/* Bottom Info */}
+                      <div className="w-full space-y-0.5">
+                        <div
+                          title={folder.name}
+                          className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors w-full px-1"
+                        >
+                          {folder.name}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1.5">
+                          <span>{isVideo ? `${folder.items.length || folder.totalItems} frames` : '2 files'}</span>
+                          <span>•</span>
+                          <span className="text-[#00e5ff]">{(folder.peakConfidence * 100).toFixed(0)}%</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-8 rounded-xl bg-[#080e18] border border-dashed border-[#11243b] text-center">
+                <Folder className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <div className="text-sm font-medium text-slate-300 mb-1">
+                  No {folderNav.category === 'videos' ? 'video' : 'image'} folders recorded yet
+                </div>
+                <div className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+                  {folderNav.category === 'videos'
+                    ? 'Upload a thermal video in the Video Analyzer to automatically create a dedicated folder.'
+                    : 'Upload a thermal image in the Image Analyzer to automatically create a dedicated folder.'}
+                </div>
+                <button
+                  onClick={() => onNavigate(folderNav.category === 'videos' ? 'video' : 'image')}
+                  className="px-4 py-2 rounded-xl bg-[#00c8e6] hover:bg-[#00e5ff] text-slate-950 font-bold text-xs tracking-wider transition-all cursor-pointer"
+                >
+                  {folderNav.category === 'videos' ? 'Launch Video Analyzer' : 'Launch Image Analyzer'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. OPEN FOLDER VIEW: Displays the files inside the opened folder */}
+        {folderNav.category && activeFolder && (
+          <div className="space-y-5 animate-in fade-in duration-200">
+            {/* Breadcrumb Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-[#080e18] border border-cyan-500/40 shadow-xl">
+              <div className="flex items-center flex-wrap gap-2 text-xs font-mono">
+                <button
+                  onClick={() => setFolderNav({ category: null, selectedFolderId: null })}
+                  className="text-slate-400 hover:text-[#00e5ff] cursor-pointer transition-colors"
+                >
+                  Evidence Folders
+                </button>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                <button
+                  onClick={() => setFolderNav({ category: folderNav.category, selectedFolderId: null })}
+                  className="text-slate-400 hover:text-[#00e5ff] cursor-pointer transition-colors uppercase"
+                >
+                  {folderNav.category === 'videos' ? 'Videos' : 'Images'}
+                </button>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                <span className="text-[#00e5ff] font-bold truncate max-w-xs sm:max-w-md">
+                  {activeFolder.name}
+                </span>
+              </div>
+
+              <button
+                onClick={() => setFolderNav({ category: folderNav.category, selectedFolderId: null })}
+                className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer transition-colors self-start sm:self-center"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to {folderNav.category === 'videos' ? 'Videos' : 'Images'}</span>
+              </button>
             </div>
 
-            {/* Extracted Frames Gallery for the currently expanded folder in Overview */}
-            {Array.from(expandedFolderIds).map((expId) => {
-              const folder = inputFolders.find((f) => f.id === expId);
-              if (!folder || folder.items.length === 0) return null;
-
-              return (
-                <div
-                  key={`expanded-${folder.id}`}
-                  className="p-5 rounded-2xl bg-[#080e18] border border-cyan-500/40 space-y-4 shadow-xl animate-in fade-in duration-200"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#11243b] pb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#071322] border border-cyan-500/50 flex items-center justify-center text-[#00e5ff] shadow-md shadow-cyan-950/40">
-                        {folder.inputType === 'video' ? <Film className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
-                      </div>
+            {/* Video Folder Content: Video File + Isolated Extracted Frames */}
+            {folderNav.category === 'videos' && (
+              <div className="space-y-6">
+                {/* 1. Video File Player Card */}
+                <div className="p-5 rounded-2xl bg-[#080e18] border border-[#11243b] space-y-4 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#11243b] pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <Film className="w-5 h-5 text-[#00e5ff]" />
                       <div>
-                        <div className="flex items-center flex-wrap gap-2">
-                          <h3 className="text-sm sm:text-base font-bold text-white">
-                            Extracted Evidence Frames
-                          </h3>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981]">
-                            Folder: {folder.name}
-                          </span>
+                        <h4 className="text-sm sm:text-base font-bold text-white">
+                          Video File: {activeFolder.name}
+                        </h4>
+                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          Session: {activeFolder.jobId || 'Recorded'} • Peak Confidence: {((activeFolder.peakConfidence || 0) * 100).toFixed(1)}% • Pedestrians: {activeFolder.totalPedestrians}
                         </div>
-                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          Frames belonging exclusively to this input folder. Click any frame to enlarge or open full folder in vault.
-                        </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-start sm:self-center">
-                      <button
-                        onClick={() => onNavigate('history', folder.id)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#00c8e6] hover:bg-[#00e5ff] text-slate-950 font-bold text-xs transition-all shadow-md cursor-pointer"
-                      >
-                        <FolderOpen className="w-3.5 h-3.5" />
-                        <span>Open in Forensic Vault</span>
-                      </button>
-                      <span className="px-3 py-1 rounded-lg bg-[#071322] border border-[#11243b] text-[#00e5ff] font-mono font-bold text-xs">
-                        {folder.items.length} Frame{folder.items.length === 1 ? '' : 's'}
+                    <button
+                      onClick={() => onNavigate('video')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#071322] hover:bg-[#0c1c30] border border-[#11243b] hover:border-cyan-500/40 text-[#00e5ff] font-mono font-bold text-xs transition-all cursor-pointer self-start sm:self-center"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      <span>Open in Video Analyzer</span>
+                    </button>
+                  </div>
+
+                  {/* HTML5 Video Player */}
+                  {(activeFolder.processedVideoUrl || activeFolder.originalVideoUrl) && (
+                    <div className="w-full rounded-xl bg-black overflow-hidden border border-[#11243b] max-h-[380px] flex items-center justify-center">
+                      <video
+                        controls
+                        playsInline
+                        src={getMediaUrl(activeFolder.processedVideoUrl || activeFolder.originalVideoUrl)}
+                        className="w-full max-h-[380px] object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Extracted Frames Section */}
+                <div className="p-5 rounded-2xl bg-[#080e18] border border-[#11243b] space-y-4 shadow-xl">
+                  <div className="flex items-center justify-between border-b border-[#11243b] pb-3">
+                    <div>
+                      <h4 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                        <span>Extracted Evidence Frames</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981]">
+                          {activeFolder.items.length} Frames
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                        Frames belonging strictly to {activeFolder.name}. Kept separate from other videos. Click any frame to enlarge.
+                      </p>
+                    </div>
+                  </div>
+
+                  {activeFolder.items.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
+                      {activeFolder.items.map((item, fIdx) => (
+                        <div
+                          key={item.id || fIdx}
+                          onClick={() =>
+                            setSelectedEnlargedMedia({
+                              url: item.snapshotUrl || item.annotatedUrl || item.originalUrl || '',
+                              title: `${activeFolder.name} — Frame #${item.frameNumber || fIdx + 1}`,
+                              subtitle: `Detected: ${item.pedestriansCount} Pedestrian(s) • Confidence: ${((item.confidence || 0) * 100).toFixed(1)}%`,
+                            })
+                          }
+                          className="group/frame relative rounded-xl bg-[#050b14] border border-[#11243b] hover:border-cyan-400 transition-all cursor-pointer overflow-hidden flex flex-col justify-between shadow-md"
+                        >
+                          <div className="relative aspect-video bg-black overflow-hidden">
+                            <img
+                              src={getMediaUrl(item.snapshotUrl || item.annotatedUrl || item.originalUrl)}
+                              alt={`Frame #${item.frameNumber || fIdx + 1}`}
+                              className="w-full h-full object-cover group-hover/frame:scale-105 transition-transform duration-200"
+                            />
+                            <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-sm border border-cyan-500/40 text-[9px] font-mono font-bold text-[#00e5ff]">
+                              #{item.frameNumber || fIdx + 1}
+                            </div>
+                            <div className="absolute top-1.5 right-1.5 p-1 rounded bg-black/80 text-slate-300 opacity-0 group-hover/frame:opacity-100 transition-opacity">
+                              <Eye className="w-3 h-3 text-[#00e5ff]" />
+                            </div>
+                          </div>
+
+                          <div className="p-2 space-y-0.5">
+                            <div className="flex items-center justify-between text-[10px] font-mono">
+                              <span className={`font-bold ${item.pedestriansCount > 0 ? 'text-red-400' : 'text-[#10b981]'}`}>
+                                {item.pedestriansCount > 0 ? `${item.pedestriansCount} Ped` : 'Clear'}
+                              </span>
+                              <span className="text-[#00e5ff] font-bold">
+                                {((item.confidence || 0) * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-6 text-center text-xs text-slate-500 font-mono">
+                      No extracted frames found for this video.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Image Folder Content: Original Image + Processed Detection Result */}
+            {folderNav.category === 'images' && (
+              <div className="p-5 rounded-2xl bg-[#080e18] border border-[#11243b] space-y-5 shadow-xl">
+                <div className="border-b border-[#11243b] pb-3">
+                  <h4 className="text-sm sm:text-base font-bold text-white">
+                    Image Folder: {activeFolder.name}
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                    Original thermal image input and corresponding processed detection result.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* File 1: Original Image */}
+                  <div
+                    onClick={() =>
+                      setSelectedEnlargedMedia({
+                        url: activeFolder.originalVideoUrl || activeFolder.items[0]?.originalUrl || activeFolder.items[0]?.snapshotUrl || activeFolder.coverImageUrl || '',
+                        title: `Original Image — ${activeFolder.name}`,
+                        subtitle: 'Raw thermal input frame',
+                      })
+                    }
+                    className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] hover:border-cyan-400 transition-all cursor-pointer space-y-3 group shadow-md"
+                  >
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="font-bold text-slate-300">1. Original Image</span>
+                      <span className="px-2 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-500/30 text-[10px]">
+                        RAW INPUT
+                      </span>
+                    </div>
+
+                    <div className="aspect-video w-full rounded-lg bg-black overflow-hidden relative flex items-center justify-center">
+                      <img
+                        src={getMediaUrl(activeFolder.originalVideoUrl || activeFolder.items[0]?.originalUrl || activeFolder.items[0]?.snapshotUrl || activeFolder.coverImageUrl)}
+                        alt={`Original — ${activeFolder.name}`}
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Eye className="w-4 h-4 text-[#00e5ff]" />
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between pt-1">
+                      <span className="truncate max-w-[200px]">{activeFolder.name}</span>
+                      <span className="text-[#00e5ff] font-semibold">Click to enlarge</span>
+                    </div>
+                  </div>
+
+                  {/* File 2: Processed Detection Result */}
+                  <div
+                    onClick={() =>
+                      setSelectedEnlargedMedia({
+                        url: activeFolder.processedVideoUrl || activeFolder.items[1]?.annotatedUrl || activeFolder.items[1]?.snapshotUrl || activeFolder.coverImageUrl || '',
+                        title: `Detection Result — ${activeFolder.name}`,
+                        subtitle: `${activeFolder.totalPedestrians} Pedestrian(s) Detected • Confidence: ${((activeFolder.peakConfidence || 0) * 100).toFixed(1)}%`,
+                      })
+                    }
+                    className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] hover:border-cyan-400 transition-all cursor-pointer space-y-3 group shadow-md"
+                  >
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="font-bold text-slate-300">2. Processed Detection Result</span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 text-[10px]">
+                        ANNOTATED RESULT
+                      </span>
+                    </div>
+
+                    <div className="aspect-video w-full rounded-lg bg-black overflow-hidden relative flex items-center justify-center">
+                      <img
+                        src={getMediaUrl(activeFolder.processedVideoUrl || activeFolder.items[1]?.annotatedUrl || activeFolder.items[1]?.snapshotUrl || activeFolder.coverImageUrl)}
+                        alt={`Detection Result — ${activeFolder.name}`}
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/80 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Eye className="w-4 h-4 text-[#00e5ff]" />
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] font-mono flex items-center justify-between pt-1">
+                      <span className={activeFolder.totalPedestrians > 0 ? 'text-red-400 font-bold' : 'text-[#10b981] font-bold'}>
+                        {activeFolder.totalPedestrians > 0 ? `${activeFolder.totalPedestrians} Pedestrian(s) Detected` : 'No Pedestrians Detected'}
+                      </span>
+                      <span className="text-[#00e5ff] font-bold">
+                        {((activeFolder.peakConfidence || 0) * 100).toFixed(0)}% Conf
                       </span>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
-                    {folder.items.map((item, fIdx) => (
-                      <div
-                        key={item.id || fIdx}
-                        onClick={() =>
-                          setSelectedEnlargedMedia({
-                            url: item.snapshotUrl || item.annotatedUrl || item.originalUrl || '',
-                            title: `${folder.name} — Frame #${item.frameNumber || fIdx + 1}`,
-                            subtitle: `Detected: ${item.pedestriansCount} Pedestrian(s) • Confidence: ${((item.confidence || 0) * 100).toFixed(1)}%`,
-                          })
-                        }
-                        className="group/frame relative rounded-xl bg-[#050b14] border border-[#11243b] hover:border-cyan-400 transition-all cursor-pointer overflow-hidden flex flex-col justify-between shadow-md"
-                      >
-                        <div className="relative aspect-video bg-black overflow-hidden">
-                          <img
-                            src={getMediaUrl(item.snapshotUrl || item.annotatedUrl || item.originalUrl)}
-                            alt={`Frame #${item.frameNumber || fIdx + 1}`}
-                            className="w-full h-full object-cover group-hover/frame:scale-105 transition-transform duration-200"
-                          />
-                          <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-sm border border-cyan-500/40 text-[9px] font-mono font-bold text-[#00e5ff]">
-                            #{item.frameNumber || fIdx + 1}
-                          </div>
-                          <div className="absolute top-1.5 right-1.5 p-1 rounded bg-black/80 text-slate-300 opacity-0 group-hover/frame:opacity-100 transition-opacity">
-                            <Eye className="w-3 h-3 text-[#00e5ff]" />
-                          </div>
-                        </div>
-
-                        <div className="p-2 space-y-0.5">
-                          <div className="flex items-center justify-between text-[10px] font-mono">
-                            <span className={`font-bold ${item.pedestriansCount > 0 ? 'text-red-400' : 'text-[#10b981]'}`}>
-                              {item.pedestriansCount > 0 ? `${item.pedestriansCount} Ped` : 'Clear'}
-                            </span>
-                            <span className="text-[#00e5ff] font-bold">
-                              {((item.confidence || 0) * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="p-8 rounded-xl bg-[#080e18] border border-dashed border-[#11243b] text-center">
-            <Film className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-            <div className="text-sm font-medium text-slate-300 mb-1">
-              No detection folders recorded yet
-            </div>
-            <div className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
-              Upload a thermal video in the Video Analyzer or images in the Image Analyzer to generate input folders and extracted evidence frames.
-            </div>
+              </div>
+            )}
           </div>
         )}
       </section>

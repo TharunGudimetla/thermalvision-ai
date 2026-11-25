@@ -143,7 +143,7 @@ def add_video_session(
     conn.commit()
     conn.close()
 
-def get_all_events(limit: int = 100) -> List[Dict[str, Any]]:
+def get_all_events(limit: int = 1000) -> List[Dict[str, Any]]:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
