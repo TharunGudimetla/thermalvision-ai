@@ -44,7 +44,8 @@ def init_db():
         peak_confidence REAL NOT NULL,
         snapshot_url TEXT,
         processed_video_url TEXT,
-        unique_pedestrians INTEGER DEFAULT 0
+        unique_pedestrians INTEGER DEFAULT 0,
+        original_video_url TEXT
     )
     """)
 
@@ -56,6 +57,11 @@ def init_db():
 
     try:
         cursor.execute("ALTER TABLE detection_events ADD COLUMN unique_pedestrians INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE video_sessions ADD COLUMN original_video_url TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -126,10 +132,17 @@ def add_video_session(
     snapshot_url: Optional[str] = None,
     processed_video_url: Optional[str] = None,
     timestamp: Optional[str] = None,
-    unique_pedestrians: int = 0
+    unique_pedestrians: int = 0,
+    original_video_url: Optional[str] = None
 ):
     if not timestamp:
         timestamp = datetime.now().isoformat()
+
+    # If original_video_url not provided, resolve from uploads directory
+    if not original_video_url:
+        for p in Path("uploads").glob(f"{job_id}_*"):
+            original_video_url = f"/uploads/{p.name}"
+            break
 
     # Overwrite prior sessions for this same filename
     remove_existing_entries_for_filename(filename, current_job_id=job_id)
@@ -137,11 +150,79 @@ def add_video_session(
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT OR REPLACE INTO video_sessions (job_id, filename, timestamp, total_frames, pedestrian_detections, peak_confidence, snapshot_url, processed_video_url, unique_pedestrians)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (job_id, filename, timestamp, total_frames, pedestrian_detections, peak_confidence, snapshot_url, processed_video_url, unique_pedestrians))
+    INSERT OR REPLACE INTO video_sessions (job_id, filename, timestamp, total_frames, pedestrian_detections, peak_confidence, snapshot_url, processed_video_url, unique_pedestrians, original_video_url)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (job_id, filename, timestamp, total_frames, pedestrian_detections, peak_confidence, snapshot_url, processed_video_url, unique_pedestrians, original_video_url))
     conn.commit()
     conn.close()
+
+def get_all_video_sessions() -> List[Dict[str, Any]]:
+    """Returns all recorded video sessions with their isolated extracted frames."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT job_id, filename, timestamp, total_frames, pedestrian_detections, peak_confidence, snapshot_url, processed_video_url, unique_pedestrians, original_video_url
+    FROM video_sessions
+    ORDER BY timestamp DESC
+    """)
+    rows = [dict(r) for r in cursor.fetchall()]
+
+    # Fetch frames grouped by job_id
+    cursor.execute("""
+    SELECT id, job_id, filename, frame_number, timestamp, pedestrians_count, confidence, snapshot_url, processed_video_url, unique_pedestrians
+    FROM detection_events
+    WHERE job_id IS NOT NULL AND job_id != ''
+    ORDER BY frame_number ASC
+    """)
+    event_rows = cursor.fetchall()
+    frames_by_job: Dict[str, list] = {}
+    for ev in event_rows:
+        jid = ev["job_id"]
+        if jid not in frames_by_job:
+            frames_by_job[jid] = []
+        frames_by_job[jid].append(dict(ev))
+
+    conn.close()
+
+    for s in rows:
+        jid = s["job_id"]
+        if not s.get("original_video_url"):
+            for p in Path("uploads").glob(f"{jid}_*"):
+                s["original_video_url"] = f"/uploads/{p.name}"
+                break
+        s["frames"] = frames_by_job.get(jid, [])
+
+    return rows
+
+def get_all_image_events(limit: int = 500) -> List[Dict[str, Any]]:
+    """Returns all recorded image detection events with original and annotated URLs."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, filename, frame_number, timestamp, pedestrians_count, confidence, snapshot_url, processed_video_url, unique_pedestrians
+    FROM detection_events
+    WHERE (job_id IS NULL OR job_id = '')
+    ORDER BY timestamp DESC
+    LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    result = []
+    for r in rows:
+        result.append({
+            "id": r["id"],
+            "filename": r["filename"],
+            "timestamp": r["timestamp"],
+            "pedestrians_count": r["pedestrians_count"],
+            "confidence": r["confidence"],
+            "original_url": r["processed_video_url"],
+            "annotated_url": r["snapshot_url"],
+        })
+    return result
+
+# Ensure database tables and columns are migrated on import
+init_db()
 
 def get_all_events(limit: int = 1000) -> List[Dict[str, Any]]:
     conn = get_connection()

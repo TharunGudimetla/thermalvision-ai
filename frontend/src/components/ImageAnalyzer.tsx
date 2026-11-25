@@ -17,8 +17,16 @@ import {
   ChevronRight,
   Box,
   Image as ImageIcon,
+  RefreshCw,
 } from 'lucide-react';
-import { detectBatchImages, detectImageFrame, saveSnapshotEvent } from '../services/api';
+import {
+  detectBatchImages,
+  detectImageFrame,
+  saveSnapshotEvent,
+  fetchAllImages,
+  getMediaUrl,
+  type ImageRecord,
+} from '../services/api';
 import type { DetectionBox, FrameDetectionResult } from '../types';
 
 interface UploadedImageItem {
@@ -44,6 +52,12 @@ export const ImageAnalyzer: React.FC = () => {
   const [savedSuccessBanner, setSavedSuccessBanner] = useState<string | null>(null);
   const [hoveredBoxIndex, setHoveredBoxIndex] = useState<number | null>(null);
 
+  // Previously uploaded images gallery state (persisted from backend/storage)
+  const [persistedImages, setPersistedImages] = useState<ImageRecord[]>([]);
+  const [isLoadingPersisted, setIsLoadingPersisted] = useState<boolean>(false);
+  const [selectedComparisonImage, setSelectedComparisonImage] = useState<ImageRecord | null>(null);
+  const [comparisonTab, setComparisonTab] = useState<'both' | 'annotated' | 'original'>('both');
+
   // Frames strictly from the most recently uploaded and processed image(s)
   const [latestUploadBatchIds, setLatestUploadBatchIds] = useState<string[]>([]);
   const [selectedEnlargedImage, setSelectedEnlargedImage] = useState<{
@@ -65,6 +79,62 @@ export const ImageAnalyzer: React.FC = () => {
 
   const allowedExtensions = ['.jpg', '.jpeg', '.png'];
   const allowedMimeTypes = ['image/jpeg', 'image/png'];
+
+  // Load previously uploaded images from backend database and persistent storage
+  const loadPersistedImages = useCallback(async () => {
+    try {
+      setIsLoadingPersisted(true);
+      const backendImages = await fetchAllImages().catch(() => []);
+
+      // Also parse any existing images saved in localStorage from prior sessions
+      let localItems: ImageRecord[] = [];
+      try {
+        const raw = localStorage.getItem('thermal_image_folders');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          parsed.forEach((folder: any) => {
+            if (folder.items && Array.isArray(folder.items)) {
+              folder.items.forEach((it: any) => {
+                localItems.push({
+                  id: it.id || `local-${it.filename}`,
+                  filename: it.filename || folder.name,
+                  timestamp: it.timestamp || folder.timestamp || new Date().toISOString(),
+                  pedestrians_count: it.pedestriansCount || 0,
+                  confidence: it.confidence || 0,
+                  original_url: it.originalUrl || it.annotatedUrl || '',
+                  annotated_url: it.annotatedUrl || it.originalUrl || '',
+                });
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Error reading local image history:', e);
+      }
+
+      // Merge backend and local images, deduplicating by normalized filename
+      const combined = [...backendImages];
+      const seen = new Set(backendImages.map((b) => b.filename.toLowerCase().trim()));
+      for (const loc of localItems) {
+        const key = loc.filename.toLowerCase().trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(loc);
+        }
+      }
+
+      combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setPersistedImages(combined);
+    } catch (err) {
+      console.warn('Failed to load persisted images:', err);
+    } finally {
+      setIsLoadingPersisted(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPersistedImages();
+  }, [loadPersistedImages]);
 
   // Calculate IoU metrics for a list of boxes
   const computeBoxesWithIou = useCallback((rawBoxes: DetectionBox[] = []): DetectionBox[] => {
@@ -1329,6 +1399,268 @@ export const ImageAnalyzer: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          PREVIOUSLY UPLOADED IMAGES GALLERY (DIRECT DISPLAY, NO FOLDERS)
+          Displays previously uploaded images directly in a clean image gallery.
+          Clicking an image opens its original image and processed detection result.
+         ========================================================================= */}
+      <div className="p-6 rounded-2xl bg-[#080e18] border border-[#11243b] space-y-4 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#11243b] pb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#071322] border border-cyan-500/50 flex items-center justify-center text-[#00e5ff] shadow-md shadow-cyan-950/40">
+              <ImageIcon className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center flex-wrap gap-2">
+                <h3 className="text-sm sm:text-base font-bold text-white">
+                  Previously Uploaded Images
+                </h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981]">
+                  {persistedImages.length} Image{persistedImages.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                Past thermal image uploads and detection results. Click any image to open its original image and processed detection result.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={loadPersistedImages}
+            disabled={isLoadingPersisted}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#071322] hover:bg-[#0c1c30] border border-[#11243b] text-slate-300 hover:text-white font-mono text-xs transition-colors self-start sm:self-center cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-[#00e5ff] ${isLoadingPersisted ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        {persistedImages.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
+            {persistedImages.map((img) => {
+              const hasPeds = (img.pedestrians_count || 0) > 0;
+              const displayUrl = getMediaUrl(img.annotated_url || img.original_url);
+
+              return (
+                <div
+                  key={img.id}
+                  onClick={() => {
+                    setSelectedComparisonImage(img);
+                    setComparisonTab('both');
+                  }}
+                  className="group relative rounded-xl bg-[#050b14] border border-[#11243b] hover:border-cyan-400 hover:bg-[#071322] transition-all cursor-pointer overflow-hidden flex flex-col justify-between shadow-md"
+                >
+                  {/* Thumbnail Preview */}
+                  <div className="relative aspect-video bg-black overflow-hidden">
+                    <img
+                      src={displayUrl}
+                      alt={img.filename}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-sm border border-cyan-500/40 text-[9px] font-mono font-bold text-[#00e5ff]">
+                      {hasPeds ? `${img.pedestrians_count} Ped` : 'Clear'}
+                    </div>
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-[11px] font-mono font-bold">
+                      <Eye className="w-4 h-4 text-[#00e5ff]" />
+                      <span>Inspect</span>
+                    </div>
+                  </div>
+
+                  {/* Card Info */}
+                  <div className="p-2 space-y-1">
+                    <div
+                      title={img.filename}
+                      className="text-[11px] font-bold text-white truncate group-hover:text-cyan-300 transition-colors"
+                    >
+                      {img.filename}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-mono">
+                      <span className={hasPeds ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
+                        {hasPeds ? 'Pedestrian Detected' : 'All Clear'}
+                      </span>
+                      <span className="text-[#00e5ff] font-bold">
+                        {((img.confidence || 0) * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-8 text-center text-xs text-slate-500 font-mono border border-dashed border-[#11243b] rounded-xl">
+            No previously uploaded images recorded yet. Select thermal images above to process and view them here.
+          </div>
+        )}
+      </div>
+
+      {/* Modal: View Original Image & Processed Detection Result */}
+      {selectedComparisonImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setSelectedComparisonImage(null)}
+        >
+          <div
+            className="max-w-5xl w-full rounded-2xl bg-[#080e18] border border-cyan-500/40 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-4 border-b border-[#11243b] flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-white truncate max-w-md">
+                  {selectedComparisonImage.filename}
+                </h4>
+                <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5">
+                  <span className={selectedComparisonImage.pedestrians_count > 0 ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
+                    {selectedComparisonImage.pedestrians_count > 0
+                      ? `${selectedComparisonImage.pedestrians_count} Pedestrian(s) Detected`
+                      : 'No Pedestrians Detected'}
+                  </span>
+                  <span>•</span>
+                  <span className="text-[#00e5ff]">
+                    Peak Confidence: {((selectedComparisonImage.confidence || 0) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center p-1 rounded-xl bg-[#050b14] border border-[#11243b] text-xs font-mono">
+                  <button
+                    onClick={() => setComparisonTab('both')}
+                    className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                      comparisonTab === 'both' ? 'bg-[#00c8e6] text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Side-by-Side
+                  </button>
+                  <button
+                    onClick={() => setComparisonTab('original')}
+                    className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                      comparisonTab === 'original' ? 'bg-[#00c8e6] text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Original
+                  </button>
+                  <button
+                    onClick={() => setComparisonTab('annotated')}
+                    className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                      comparisonTab === 'annotated' ? 'bg-[#00c8e6] text-slate-950 font-bold' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Processed Result
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setSelectedComparisonImage(null)}
+                  className="p-2 rounded-xl bg-[#071322] hover:bg-[#0c1c30] text-slate-300 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+              {comparisonTab === 'both' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Original Image */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-slate-400 font-bold uppercase">Original Thermal Image</span>
+                      <a
+                        href={getMediaUrl(selectedComparisonImage.original_url || selectedComparisonImage.annotated_url)}
+                        download={`original_${selectedComparisonImage.filename}`}
+                        className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Download</span>
+                      </a>
+                    </div>
+                    <div className="rounded-xl overflow-hidden bg-black border border-[#11243b] aspect-video flex items-center justify-center">
+                      <img
+                        src={getMediaUrl(selectedComparisonImage.original_url || selectedComparisonImage.annotated_url)}
+                        alt="Original"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Processed Detection Result */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-[#00e5ff] font-bold uppercase">Processed Detection Result</span>
+                      <a
+                        href={getMediaUrl(selectedComparisonImage.annotated_url || selectedComparisonImage.original_url)}
+                        download={`annotated_${selectedComparisonImage.filename}`}
+                        className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Download</span>
+                      </a>
+                    </div>
+                    <div className="rounded-xl overflow-hidden bg-black border border-[#11243b] aspect-video flex items-center justify-center">
+                      <img
+                        src={getMediaUrl(selectedComparisonImage.annotated_url || selectedComparisonImage.original_url)}
+                        alt="Processed Detection Result"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {comparisonTab === 'original' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-400 font-bold uppercase">Original Thermal Image</span>
+                    <a
+                      href={getMediaUrl(selectedComparisonImage.original_url || selectedComparisonImage.annotated_url)}
+                      download={`original_${selectedComparisonImage.filename}`}
+                      className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download</span>
+                    </a>
+                  </div>
+                  <div className="rounded-xl overflow-hidden bg-black border border-[#11243b] flex items-center justify-center max-h-[65vh]">
+                    <img
+                      src={getMediaUrl(selectedComparisonImage.original_url || selectedComparisonImage.annotated_url)}
+                      alt="Original"
+                      className="max-w-full max-h-[65vh] object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {comparisonTab === 'annotated' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-[#00e5ff] font-bold uppercase">Processed Detection Result</span>
+                    <a
+                      href={getMediaUrl(selectedComparisonImage.annotated_url || selectedComparisonImage.original_url)}
+                      download={`annotated_${selectedComparisonImage.filename}`}
+                      className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download</span>
+                    </a>
+                  </div>
+                  <div className="rounded-xl overflow-hidden bg-black border border-[#11243b] flex items-center justify-center max-h-[65vh]">
+                    <img
+                      src={getMediaUrl(selectedComparisonImage.annotated_url || selectedComparisonImage.original_url)}
+                      alt="Processed Detection Result"
+                      className="max-w-full max-h-[65vh] object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

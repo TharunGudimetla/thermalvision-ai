@@ -19,7 +19,9 @@ from .database import (
     get_all_events,
     delete_event,
     clear_all_events,
-    get_overview_stats
+    get_overview_stats,
+    get_all_video_sessions,
+    get_all_image_events
 )
 
 # Initialize database tables
@@ -370,6 +372,14 @@ def get_video_result(job_id: str):
 @app.get("/api/history")
 def get_history_events():
     return get_all_events()
+
+@app.get("/api/videos")
+def get_videos():
+    return get_all_video_sessions()
+
+@app.get("/api/images")
+def get_images():
+    return get_all_image_events()
 
 @app.post("/api/history/snapshot")
 async def save_live_snapshot(

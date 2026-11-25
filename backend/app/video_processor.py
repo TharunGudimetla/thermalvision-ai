@@ -528,6 +528,7 @@ def run_video_analysis_job(
                 peak_snapshot_path = f"/snapshots/{job_id}/frames/{mid_filename}"
 
         # Record session in database with both unique pedestrians and total detection instances
+        original_vid_url = f"/uploads/{input_video_path.name}"
         add_video_session(
             job_id=job_id,
             filename=original_filename,
@@ -536,11 +537,13 @@ def run_video_analysis_job(
             peak_confidence=round(peak_conf, 3),
             snapshot_url=peak_snapshot_path,
             processed_video_url=f"/outputs/{output_filename}",
-            unique_pedestrians=final_unique_count
+            unique_pedestrians=final_unique_count,
+            original_video_url=original_vid_url
         )
 
         active_jobs[job_id]["status"] = "completed"
         active_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+        active_jobs[job_id]["original_video_url"] = original_vid_url
         active_jobs[job_id]["processed_video_url"] = f"/outputs/{output_filename}"
         active_jobs[job_id]["peak_snapshot_url"] = peak_snapshot_path
         active_jobs[job_id]["progress_percent"] = 100.0

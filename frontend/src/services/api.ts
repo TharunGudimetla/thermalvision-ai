@@ -81,7 +81,8 @@ export async function detectImageFrame(
     return res.json();
   } else {
     const formData = new FormData();
-    formData.append('file', imageBlobOrBase64, 'frame.jpg');
+    const filename = (imageBlobOrBase64 as File).name || 'frame.jpg';
+    formData.append('file', imageBlobOrBase64, filename);
     formData.append('conf', confThreshold.toString());
     const res = await apiFetch(`${API_BASE}/detect/image-file`, {
       method: 'POST',
@@ -181,5 +182,41 @@ export async function saveSnapshotEvent(
     body: formData,
   });
   if (!res.ok) throw new Error('Failed to save snapshot to history');
+  return res.json();
+}
+
+export interface VideoSessionRecord {
+  job_id: string;
+  filename: string;
+  timestamp: string;
+  total_frames: number;
+  pedestrian_detections: number;
+  peak_confidence: number;
+  snapshot_url?: string;
+  original_video_url?: string;
+  processed_video_url?: string;
+  unique_pedestrians: number;
+  frames: DetectionEvent[];
+}
+
+export interface ImageRecord {
+  id: string;
+  filename: string;
+  timestamp: string;
+  pedestrians_count: number;
+  confidence: number;
+  original_url: string;
+  annotated_url: string;
+}
+
+export async function fetchAllVideos(): Promise<VideoSessionRecord[]> {
+  const res = await apiFetch(`${API_BASE}/videos`);
+  if (!res.ok) throw new Error('Failed to fetch video sessions');
+  return res.json();
+}
+
+export async function fetchAllImages(): Promise<ImageRecord[]> {
+  const res = await apiFetch(`${API_BASE}/images`);
+  if (!res.ok) throw new Error('Failed to fetch image records');
   return res.json();
 }

@@ -17,6 +17,9 @@ import {
   RefreshCw,
   Eye,
   X,
+  Folder,
+  ArrowLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   startVideoDetection,
@@ -24,6 +27,8 @@ import {
   getMediaUrl,
   fetchHealth,
   fetchHistory,
+  fetchAllVideos,
+  type VideoSessionRecord,
 } from '../services/api';
 import type { VideoJobProgress, DetectionEvent } from '../types';
 
@@ -36,6 +41,12 @@ export const VideoAnalyzer: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [backendOnline, setBackendOnline] = useState<boolean>(true);
   const [isCheckingBackend, setIsCheckingBackend] = useState<boolean>(false);
+
+  // Recorded video folders state (persisted from backend SQLite & isolated files)
+  const [videoFolders, setVideoFolders] = useState<VideoSessionRecord[]>([]);
+  const [selectedFolderJobId, setSelectedFolderJobId] = useState<string | null>(null);
+  const [isLoadingFolders, setIsLoadingFolders] = useState<boolean>(false);
+  const [failedThumbnails, setFailedThumbnails] = useState<Record<string, boolean>>({});
 
   // Frames strictly from the most recently uploaded and processed video
   const [recentVideoFrames, setRecentVideoFrames] = useState<DetectionEvent[]>([]);
@@ -161,14 +172,30 @@ export const VideoAnalyzer: React.FC = () => {
     }
   };
 
+  // Load all recorded video sessions and folders from backend database
+  const loadVideoFolders = async () => {
+    try {
+      setIsLoadingFolders(true);
+      const data = await fetchAllVideos();
+      setVideoFolders(data);
+    } catch (err) {
+      console.warn('Failed to load recorded video sessions:', err);
+    } finally {
+      setIsLoadingFolders(false);
+    }
+  };
+
   useEffect(() => {
     checkBackendHealth();
+    loadVideoFolders();
     const hInterval = setInterval(checkBackendHealth, 8000);
     return () => clearInterval(hInterval);
   }, []);
 
   // Playback state
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const selectedFolder = videoFolders.find((f) => f.job_id === selectedFolderJobId) || null;
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(true);
   const [currentFrameNum, setCurrentFrameNum] = useState<number>(0);
@@ -357,6 +384,7 @@ export const VideoAnalyzer: React.FC = () => {
               setErrorMsg(status.error_message || 'Video analysis encountered an error.');
             } else if (status.status === 'completed') {
               loadRecentFrames(jobId, selectedFile?.name || '', status);
+              loadVideoFolders();
             }
           }
         } catch (err) {
@@ -581,40 +609,41 @@ export const VideoAnalyzer: React.FC = () => {
 
       {/* Main Container */}
       {!selectedFile ? (
-        /* Video Upload Dropzone */
-        <div className="max-w-3xl mx-auto py-10">
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
-            className="p-12 rounded-3xl bg-[#080e18] border-2 border-dashed border-[#11243b] hover:border-[#00e5ff] transition-all text-center flex flex-col items-center justify-center relative overflow-hidden group shadow-2xl"
-          >
-            <div className="absolute inset-0 surveillance-grid opacity-20 pointer-events-none" />
+        /* Video Upload Dropzone: Exactly same width and height as Image dropzone */
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+          onClick={() => videoInputRef.current?.click()}
+          className="border-2 border-dashed border-[#11243b] hover:border-[#00e5ff] rounded-2xl p-12 sm:p-16 text-center bg-[#080e18] hover:bg-[#071322] transition-all cursor-pointer group shadow-2xl relative overflow-hidden"
+        >
+          <div className="absolute inset-0 surveillance-grid opacity-20 pointer-events-none" />
 
-            <div className="w-20 h-20 rounded-2xl bg-[#050b14] border border-[#11243b] flex items-center justify-center text-[#00e5ff] mb-6 group-hover:scale-105 transition-transform shadow-lg shadow-cyan-950/30">
-              <Upload className="w-10 h-10" />
-            </div>
+          <div className="w-16 h-16 rounded-2xl bg-[#050b14] border border-[#11243b] flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform shadow-lg shadow-cyan-950/40 text-[#00e5ff]">
+            <Upload className="w-8 h-8" />
+          </div>
 
-            <h2 className="text-xl font-bold text-white mb-2">
-              Ingest Thermal Surveillance Footage
-            </h2>
-            <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">
-              Upload MP4, AVI, MOV, MKV, or WEBM thermal video files. The backend feeds every frame through your genuine 1-channel YOLOv8 model for pedestrian detection.
-            </p>
+          <h3 className="text-base sm:text-lg font-bold text-white tracking-tight mb-1">
+            Drag & Drop thermal videos here, or browse files
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto mb-4">
+            Upload MP4, AVI, MOV, MKV, or WEBM thermal video files. The backend feeds every frame through your genuine 1-channel YOLOv8 model for pedestrian detection.
+          </p>
 
-            <label className="cursor-pointer px-6 py-3 rounded-xl bg-[#00c8e6] hover:bg-[#00e5ff] text-slate-950 font-extrabold text-xs tracking-wider uppercase transition-all shadow-lg shadow-cyan-950/40 mb-4 inline-flex items-center gap-2">
-              <Film className="w-4 h-4" />
-              Select Video from Computer
-              <input
-                type="file"
-                accept="*/*,video/*,.mp4,.avi,.mov,.mkv,.webm,.flv,.wmv,.m4v,.ts"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
+          <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00c8e6] hover:bg-[#00e5ff] text-slate-950 font-extrabold text-xs tracking-wide shadow-lg shadow-cyan-950/40 transition-all">
+            <Film className="w-4 h-4 text-slate-950" />
+            <span>Select Video from Computer</span>
+          </div>
 
-            <div className="text-[11px] text-slate-400 font-mono">
-              Supported Formats: MP4, AVI, MOV, MKV, WEBM, FLV, WMV, TS • All Containers Allowed
-            </div>
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="*/*,video/*,.mp4,.avi,.mov,.mkv,.webm,.flv,.wmv,.m4v,.ts"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          <div className="text-[11px] text-slate-500 font-mono mt-3">
+            Supported Formats: MP4, AVI, MOV, MKV, WEBM, FLV, WMV, TS • All Containers Allowed
           </div>
         </div>
       ) : jobProgress?.status === 'failed' ? (
@@ -1201,6 +1230,294 @@ export const VideoAnalyzer: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* =========================================================================
+          RECORDED VIDEO FOLDERS (BLUE FOLDER DESIGN)
+          One separate folder for every uploaded video, named using the video filename.
+          Opening a folder displays:
+          1. Original uploaded video
+          2. Annotated/processed video
+          3. Extracted unique frames (without duplicates, isolated to this folder)
+         ========================================================================= */}
+      <div className="p-6 rounded-2xl bg-[#080e18] border border-[#11243b] space-y-5 shadow-xl">
+        {!selectedFolder ? (
+          <>
+            {/* Header: Video Folders List */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#11243b] pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#071322] border border-cyan-500/50 flex items-center justify-center text-[#00e5ff] shadow-md shadow-cyan-950/40">
+                  <Folder className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center flex-wrap gap-2">
+                    <h3 className="text-sm sm:text-base font-bold text-white">
+                      Recorded Video Folders
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981]">
+                      {videoFolders.length} Folders
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                    Every uploaded video has its own isolated folder. Open a folder to view its original video, processed detection video, and unique extracted frames.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={loadVideoFolders}
+                disabled={isLoadingFolders}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#071322] hover:bg-[#0c1c30] border border-[#11243b] text-slate-300 hover:text-white font-mono text-xs transition-colors self-start sm:self-center cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-[#00e5ff] ${isLoadingFolders ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {videoFolders.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {videoFolders.map((folder) => {
+                  const hasPeds = (folder.unique_pedestrians || folder.pedestrian_detections || 0) > 0;
+                  const pedCount = folder.unique_pedestrians ?? folder.pedestrian_detections ?? 0;
+                  const framesCount = folder.frames?.length || folder.total_frames || 0;
+
+                  return (
+                    <div
+                      key={folder.job_id}
+                      onClick={() => setSelectedFolderJobId(folder.job_id)}
+                      className="group aspect-square rounded-2xl bg-[#080e18] hover:bg-[#071322] border border-[#11243b] hover:border-cyan-500/50 hover:shadow-cyan-950/30 transition-all cursor-pointer p-3.5 flex flex-col items-center justify-between text-center relative overflow-hidden shadow-lg"
+                    >
+                      {/* Top Badges */}
+                      <div className="w-full flex items-center justify-between text-[9px] font-mono">
+                        <span className="px-1.5 py-0.5 rounded font-bold bg-blue-950/80 text-blue-300 border border-blue-500/30">
+                          VIDEO
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded font-bold ${
+                          hasPeds
+                            ? 'bg-red-950/80 text-red-400 border border-red-500/30'
+                            : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
+                        }`}>
+                          {hasPeds ? `${pedCount} Ped` : 'Clear'}
+                        </span>
+                      </div>
+
+                      {/* Center Thumbnail with Blue Folder Icon */}
+                      <div className="w-20 h-16 sm:w-22 sm:h-16 rounded-xl bg-[#050b14] border border-[#11243b] group-hover:border-cyan-400/60 transition-all flex items-center justify-center relative overflow-hidden shadow-md my-auto">
+                        {folder.snapshot_url && !failedThumbnails[folder.job_id] ? (
+                          <>
+                            <img
+                              src={getMediaUrl(folder.snapshot_url)}
+                              alt={folder.filename}
+                              onError={() => setFailedThumbnails((prev) => ({ ...prev, [folder.job_id]: true }))}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-black/25 pointer-events-none" />
+                            <Folder className="absolute bottom-1 right-1 w-3.5 h-3.5 text-[#00e5ff] drop-shadow" />
+                          </>
+                        ) : (
+                          <Folder className="w-10 h-10 text-[#00e5ff] group-hover:scale-110 transition-transform" />
+                        )}
+                      </div>
+
+                      {/* Bottom Info */}
+                      <div className="w-full space-y-0.5">
+                        <div
+                          title={folder.filename}
+                          className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors w-full px-1"
+                        >
+                          {folder.filename}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center justify-center gap-1.5">
+                          <span>{framesCount} frames</span>
+                          <span>•</span>
+                          <span className="text-[#00e5ff]">
+                            {((folder.peak_confidence || 0) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-8 rounded-xl bg-[#080e18] border border-dashed border-[#11243b] text-center">
+                <Folder className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <div className="text-sm font-medium text-slate-300 mb-1">
+                  No video folders recorded yet
+                </div>
+                <div className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Upload a thermal video above to automatically analyze it and create a persistent folder.
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* =====================================================================
+              OPENED VIDEO FOLDER VIEW
+              Displays:
+              1. Original uploaded video
+              2. Annotated/processed video
+              3. Extracted unique frames (without duplicates)
+             ===================================================================== */
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {/* Breadcrumb Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-[#080e18] border border-cyan-500/40 shadow-xl">
+              <div className="flex items-center flex-wrap gap-2 text-xs font-mono">
+                <button
+                  onClick={() => setSelectedFolderJobId(null)}
+                  className="text-slate-400 hover:text-[#00e5ff] flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Video Folders</span>
+                </button>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                <span className="text-[#00e5ff] font-bold truncate max-w-xs sm:max-w-md">
+                  {selectedFolder.filename}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-950 border border-cyan-500/40 text-[#00e5ff] ml-1.5">
+                  ID: {selectedFolder.job_id}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981]">
+                  {selectedFolder.unique_pedestrians || selectedFolder.pedestrian_detections || 0} Unique Pedestrians
+                </span>
+              </div>
+
+              <button
+                onClick={() => setSelectedFolderJobId(null)}
+                className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer transition-colors self-start sm:self-center"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to All Folders</span>
+              </button>
+            </div>
+
+            {/* Video Players (Original & Annotated) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* 1. Original Uploaded Video Card */}
+              <div className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] space-y-3">
+                <div className="flex items-center justify-between border-b border-[#11243b] pb-2">
+                  <div className="flex items-center gap-2">
+                    <Film className="w-4 h-4 text-slate-400" />
+                    <span className="text-xs font-mono font-bold text-white uppercase">
+                      Original Uploaded Video
+                    </span>
+                  </div>
+                  {selectedFolder.original_video_url && (
+                    <a
+                      href={getMediaUrl(selectedFolder.original_video_url)}
+                      download={`original_${selectedFolder.filename}`}
+                      className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download</span>
+                    </a>
+                  )}
+                </div>
+
+                <div className="rounded-xl overflow-hidden bg-black border border-[#11243b] aspect-video flex items-center justify-center">
+                  <video
+                    controls
+                    playsInline
+                    src={getMediaUrl(selectedFolder.original_video_url || selectedFolder.processed_video_url)}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Annotated Processed Video Card */}
+              <div className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] space-y-3">
+                <div className="flex items-center justify-between border-b border-[#11243b] pb-2">
+                  <div className="flex items-center gap-2">
+                    <Play className="w-4 h-4 text-[#00e5ff]" />
+                    <span className="text-xs font-mono font-bold text-[#00e5ff] uppercase">
+                      Annotated Video (YOLOv8 & ByteTrack)
+                    </span>
+                  </div>
+                  {selectedFolder.processed_video_url && (
+                    <a
+                      href={getMediaUrl(selectedFolder.processed_video_url)}
+                      download={`annotated_${selectedFolder.filename}`}
+                      className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>Download</span>
+                    </a>
+                  )}
+                </div>
+
+                <div className="rounded-xl overflow-hidden bg-black border border-[#11243b] aspect-video flex items-center justify-center">
+                  <video
+                    controls
+                    playsInline
+                    src={getMediaUrl(selectedFolder.processed_video_url || selectedFolder.original_video_url)}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Extracted Unique Frames Section */}
+            <div className="p-4 rounded-xl bg-[#050b14] border border-[#11243b] space-y-3">
+              <div className="flex items-center justify-between border-b border-[#11243b] pb-2">
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                    <span>Extracted Unique Frames</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#042017] border border-[#10b981]/40 text-[#10b981]">
+                      {selectedFolder.frames?.length || 0} Frames
+                    </span>
+                  </h4>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    Stored in snapshots/{selectedFolder.job_id}/frames/. Visually near-identical duplicates skipped using perceptual hashing.
+                  </p>
+                </div>
+              </div>
+
+              {selectedFolder.frames && selectedFolder.frames.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {selectedFolder.frames.map((frame, fIdx) => (
+                    <div
+                      key={frame.id || fIdx}
+                      onClick={() =>
+                        setSelectedEnlargedFrame({
+                          ...frame,
+                          filename: `${selectedFolder.filename} — Frame #${frame.frame_number}`,
+                        })
+                      }
+                      className="group relative rounded-xl bg-[#080e18] border border-[#11243b] hover:border-cyan-400 transition-all cursor-pointer overflow-hidden flex flex-col justify-between shadow-md"
+                    >
+                      <div className="relative aspect-video bg-black overflow-hidden">
+                        <img
+                          src={getMediaUrl(frame.snapshot_url)}
+                          alt={`Frame #${frame.frame_number}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        />
+                        <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-sm border border-cyan-500/40 text-[9px] font-mono font-bold text-[#00e5ff]">
+                          #{frame.frame_number}
+                        </div>
+                        <div className="absolute top-1.5 right-1.5 p-1 rounded bg-black/80 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Eye className="w-3 h-3 text-[#00e5ff]" />
+                        </div>
+                      </div>
+
+                      <div className="p-1.5 flex items-center justify-between text-[10px] font-mono">
+                        <span className={`font-bold ${frame.pedestrians_count > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                          {frame.pedestrians_count > 0 ? `${frame.pedestrians_count} Ped` : 'Clear'}
+                        </span>
+                        <span className="text-[#00e5ff] font-bold">
+                          {((frame.confidence || 0) * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-500 font-mono">
+                  No extracted keyframes found for this video.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Modal for Enlarged Frame View */}
       {selectedEnlargedFrame && (
